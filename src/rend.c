@@ -24,12 +24,13 @@ void _set_pixel(const rend_context_t *ctx, rend_point2d p, uint32_t color)
 {
     // resolve pixel address in buffer, after 2d transforms
     if(ctx->px_bits == 1) {     // monochrome image: 8px per byte
-        uint8_t width_bytes = (ctx->dim_x / 8) + (ctx->dim_x % 8)? 1 : 0;
+        uint8_t width_bytes = (ctx->dim_x / 8) + ((ctx->dim_x % 8)? 1 : 0);
         uint8_t *buf_byte = &ctx->buffer[p.y * width_bytes + p.x / 8];
         if(color) {
-            *buf_byte = *buf_byte & ~(0x80 >> p.x % 8);
-        } else {
             *buf_byte = *buf_byte | (0x80 >> p.x % 8);
+            return;
+        } else {
+            *buf_byte = *buf_byte & ~(0x80 >> p.x % 8);
         }
     }
 }
