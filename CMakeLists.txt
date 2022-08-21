@@ -1,29 +1,26 @@
 cmake_minimum_required(VERSION 3.12)
-include(pico_sdk_import.cmake)
+#include(pico_sdk_import.cmake)
 
 project(librend C CXX ASM)
 
-pico_sdk_init()
+#pico_sdk_init()
 
-add_library(rend)
+add_library(rend INTERFACE)
 
 target_include_directories(
     rend
-    PUBLIC
+    INTERFACE
     ${CMAKE_CURRENT_LIST_DIR}/include
 )
 
 target_sources(
     rend
-    PUBLIC
+    INTERFACE
     ${CMAKE_CURRENT_LIST_DIR}/src/rend.c
 )
 
 target_link_libraries(
     rend
-    PUBLIC
-    shale_core
-    class_display
-    driver_sh1007
+    INTERFACE
 )
 

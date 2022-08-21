@@ -23,9 +23,6 @@
 #define REND_POINT_7    7
 #define REND_POINT_8    8
 
-#define REND_TRANSPORT_SPI  0
-#define REND_TRANSPORT_I2C  1
-
 typedef struct rend_font {
     uint8_t id;
 } rend_font_t;
@@ -37,7 +34,7 @@ typedef struct rend_context {
     uint16_t dim_y;
     uint8_t px_bits;
     uint8_t px_bytes;
-    uint8_t point_size;
+    uint8_t point_radius;
     uint16_t color_fg;
     uint16_t color_bg;
     rend_font_t *font;
@@ -58,5 +55,9 @@ void rend_draw_text(const rend_context_t *ctx,
                     rend_point2d p, const uint8_t *text);
 void rend_draw_rect(const rend_context_t *ctx,
                     rend_point2d p0, rend_point2d p1, bool fill);
+
+#ifndef PICO_RP2040
+uint8_t *rend_print_buffer(const rend_context_t *ctx);
+#endif
 
 #endif
