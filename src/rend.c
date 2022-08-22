@@ -101,6 +101,7 @@ rend_context_t *rend_context_create(uint16_t width, uint16_t height, uint8_t px_
     ctx->px_bits = px_bits;
     ctx->buffer_length = buffer_length;
     ctx->buffer = malloc(buffer_length);
+    memset(ctx->buffer, 0, buffer_length);
     ctx->font = malloc(sizeof(rend_font_t));
     ctx->font->id = REND_FONT_12;
     ctx->color_bg = REND_BLACK;
