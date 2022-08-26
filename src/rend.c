@@ -16,6 +16,7 @@
 
 #include "rend.h"
 
+#include <stdio.h>
 #include <string.h>
 
 // TODO implement image transforms
@@ -28,11 +29,13 @@ void _set_pixel(const rend_context_t *ctx, rend_point2d p, uint32_t color)
         uint8_t *buf_byte = &ctx->buffer[p.y * width_bytes + p.x / 8];
         if(color) {
             *buf_byte = *buf_byte | (0x80 >> p.x % 8);
-            return;
         } else {
             *buf_byte = *buf_byte & ~(0x80 >> p.x % 8);
         }
     }
+#ifdef REND_DEBUG_DISPLAY_PIXEL
+    rend_debug_buffer_print_stdout(ctx);
+#endif
 }
 
 uint32_t _get_pixel(const rend_context_t *ctx, rend_point2d p)
@@ -121,10 +124,10 @@ void rend_draw_point(const rend_context_t *ctx, rend_point2d p)
 }
 
 void rend_draw_line(const rend_context_t *ctx, rend_point2d p0, rend_point2d p1, bool solid)
-{
+{/*
     rend_point2d p;
     int8_t sx, sy;
-    int32_t x, y, dx, dy, error;
+    int32_t dx, dy, error;
 
     dx = abs(p1.x - p0.x);
     sx = p0.x < p1.x? 1 : -1;
@@ -135,8 +138,8 @@ void rend_draw_line(const rend_context_t *ctx, rend_point2d p0, rend_point2d p1,
 
     while (1)
     {
-        rend_draw_point(ctx, p);
-        if(p.x == p1.x && p.y == p1.y) break;
+        printf("err=%d\n", error);
+        _set_pixel(ctx, p, ctx->color_fg);
 
         if((2 * error) >= dy) {
             if(p.x == p1.x) break;
@@ -148,7 +151,28 @@ void rend_draw_line(const rend_context_t *ctx, rend_point2d p0, rend_point2d p1,
             error += dx;
             p.y += sy;
         }
+    }*/
+    
+    int x0, x1, y0, y1;
+    x0 = p0.x; y0 = p0.y;
+    x1 = p1.x; y1 = p1.y;
+    int dx = abs(x1-x0), sx = x0<x1 ? 1 : -1;
+    int dy = -abs(y1-y0), sy = y0<y1 ? 1 : -1;
+    int err = dx+dy, e2; // error value e_xy 
+    for (;;){ // loop 
+        printf("err=%d\n", err);
+        _set_pixel(ctx, (rend_point2d){x0,y0}, ctx->color_fg);
+        e2 = 2*err;
+        if (e2 >= dy) { // e_xy+e_x > 0 
+            if (x0 == x1) break;
+            err += dy; x0 += sx;
+        }
+        if (e2 <= dx) { // e_xy+e_y < 0 
+            if (y0 == y1) break;
+            err += dx; y0 += sy;
+        }
     }
+
 }
 
 void rend_draw_clear(const rend_context_t *ctx)
@@ -169,7 +193,6 @@ void rend_draw_rect(const rend_context_t *ctx,
     
 }
 
-#ifndef PICO_RP2040
 uint8_t *rend_print_buffer(const rend_context_t *ctx)
 {
     size_t out_len;
@@ -189,4 +212,12 @@ uint8_t *rend_print_buffer(const rend_context_t *ctx)
     *p = '\0';
     return out;
 }
-#endif
+void rend_debug_buffer_print_stdout(const rend_context_t *ctx)
+{
+    uint8_t width = ctx->dim_x;
+    uint8_t *frame = rend_print_buffer(ctx);
+    uint8_t *border = calloc(sizeof(uint8_t), width + 1);
+    memset(border, '#', width);
+    border[width] = '\0';
+    printf("%s\n%s%s\n", border, frame, border);
+}

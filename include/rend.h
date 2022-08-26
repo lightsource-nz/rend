@@ -56,8 +56,7 @@ void rend_draw_text(const rend_context_t *ctx,
 void rend_draw_rect(const rend_context_t *ctx,
                     rend_point2d p0, rend_point2d p1, bool fill);
 
-#ifndef PICO_RP2040
 uint8_t *rend_print_buffer(const rend_context_t *ctx);
-#endif
+void rend_debug_buffer_print_stdout(const rend_context_t *ctx);
 
 #endif

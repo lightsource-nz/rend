@@ -19,8 +19,13 @@ target_sources(
     ${CMAKE_CURRENT_LIST_DIR}/src/rend.c
 )
 
+target_compile_definitions(
+    rend
+    INTERFACE
+    #REND_DEBUG_DISPLAY_PIXEL
+)
+
 target_link_libraries(
     rend
     INTERFACE
 )
-
