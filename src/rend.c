@@ -124,10 +124,10 @@ void rend_draw_point(const rend_context_t *ctx, rend_point2d p)
 }
 
 void rend_draw_line(const rend_context_t *ctx, rend_point2d p0, rend_point2d p1, bool solid)
-{/*
+{
     rend_point2d p;
     int8_t sx, sy;
-    int32_t dx, dy, error;
+    int32_t dx, dy, error, err2;
 
     dx = abs(p1.x - p0.x);
     sx = p0.x < p1.x? 1 : -1;
@@ -138,41 +138,20 @@ void rend_draw_line(const rend_context_t *ctx, rend_point2d p0, rend_point2d p1,
 
     while (1)
     {
-        printf("err=%d\n", error);
         _set_pixel(ctx, p, ctx->color_fg);
+        err2 = 2 * error;
 
-        if((2 * error) >= dy) {
+        if(err2 >= dy) {
             if(p.x == p1.x) break;
             error += dy;
             p.x += sx;
         }
-        if((2 * error) <= dx) {
+        if(err2 <= dx) {
             if(p.y == p1.y) break;
             error += dx;
             p.y += sy;
         }
-    }*/
-    
-    int x0, x1, y0, y1;
-    x0 = p0.x; y0 = p0.y;
-    x1 = p1.x; y1 = p1.y;
-    int dx = abs(x1-x0), sx = x0<x1 ? 1 : -1;
-    int dy = -abs(y1-y0), sy = y0<y1 ? 1 : -1;
-    int err = dx+dy, e2; // error value e_xy 
-    for (;;){ // loop 
-        printf("err=%d\n", err);
-        _set_pixel(ctx, (rend_point2d){x0,y0}, ctx->color_fg);
-        e2 = 2*err;
-        if (e2 >= dy) { // e_xy+e_x > 0 
-            if (x0 == x1) break;
-            err += dy; x0 += sx;
-        }
-        if (e2 <= dx) { // e_xy+e_y < 0 
-            if (y0 == y1) break;
-            err += dx; y0 += sy;
-        }
     }
-
 }
 
 void rend_draw_clear(const rend_context_t *ctx)
