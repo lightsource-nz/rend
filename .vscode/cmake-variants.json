@@ -1,0 +1,55 @@
+{
+    "buildType": {
+        "default": "debug",
+        "choices": {
+            "debug": {
+                "short": "Debug",
+                "long": "Disable optimizations- include debug information",
+                "buildType": "Debug"
+            },
+            "release": {
+                "short": "Release",
+                "long": "Optimize for speed- exclude debug information",
+                "buildType": "Release"
+            }
+        }
+    },
+
+    "renderDebug": {
+        "default": "none",
+        "choices": {
+            "none": {
+                "short": "None",
+                "long": "Render debugging disabled"
+            },
+            "api": {
+                "short": "API",
+                "long": "Produce one debugging frame per call to the rendering API",
+                "settings": {
+                    "RENDER_DEBUG": "API"
+                }
+            },
+            "line": {
+                "short": "Line",
+                "long": "Produce one debugging frame per line, arc or glyph rendered",
+                "settings": {
+                    "RENDER_DEBUG": "LINE"
+                }
+            },
+            "point": {
+                "short": "Point",
+                "long": "Produce one debugging frame per point rendered",
+                "settings": {
+                    "RENDER_DEBUG": "POINT"
+                }
+            },
+            "pixel": {
+                "short": "Pixel",
+                "long": "Produce one debugging frame every time a pixel value changes",
+                "settings": {
+                    "RENDER_DEBUG": "PIXEL"
+                }
+            }
+        }
+    }
+}
