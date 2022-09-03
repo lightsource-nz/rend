@@ -1,54 +1,50 @@
 {
     "buildType": {
-        "default": "debug",
+        "default": "debug-host",
         "choices": {
-            "debug": {
-                "short": "Debug",
-                "long": "Disable optimizations- include debug information",
+            "trace-rp2040": {
+                "short": "Trace - RP2040",
+                "long": "Debug build with logging of API function calls",
+                "buildType": "Debug",
+                "settings": {
+                    "REND_API_TRACE": "1"
+                }
+            },
+            "trace-host": {
+                "short": "Trace - Host",
+                "long": "Debug build with logging of API function calls",
+                "buildType": "Debug",
+                "settings": {
+                    "PICO_PLATFORM": "host",
+                    "REND_API_TRACE": "1"
+                }
+            },
+            "debug-rp2040": {
+                "short": "Debug - RP2040",
+                "long": "Include debug information",
                 "buildType": "Debug"
+            },
+            "debug-host": {
+                "short": "Debug - Host",
+                "long": "Include debug information",
+                "buildType": "Debug",
+                "settings": {
+                    "PICO_PLATFORM": "host"
+                }
+            },
+            "render-debug": {
+                "short": "Render Debug - Host",
+                "long": "Run locally on host OS- render API debug enabled",
+                "buildType": "Debug",
+                "settings": {
+                    "PICO_PLATFORM": "host",
+                    "REND_RENDER_DEBUG": "1"
+                }
             },
             "release": {
                 "short": "Release",
                 "long": "Optimize for speed- exclude debug information",
                 "buildType": "Release"
-            }
-        }
-    },
-
-    "renderDebug": {
-        "default": "none",
-        "choices": {
-            "none": {
-                "short": "None",
-                "long": "Render debugging disabled"
-            },
-            "api": {
-                "short": "API",
-                "long": "Produce one debugging frame per call to the rendering API",
-                "settings": {
-                    "RENDER_DEBUG": "API"
-                }
-            },
-            "line": {
-                "short": "Line",
-                "long": "Produce one debugging frame per line, arc or glyph rendered",
-                "settings": {
-                    "RENDER_DEBUG": "LINE"
-                }
-            },
-            "point": {
-                "short": "Point",
-                "long": "Produce one debugging frame per point rendered",
-                "settings": {
-                    "RENDER_DEBUG": "POINT"
-                }
-            },
-            "pixel": {
-                "short": "Pixel",
-                "long": "Produce one debugging frame every time a pixel value changes",
-                "settings": {
-                    "RENDER_DEBUG": "PIXEL"
-                }
             }
         }
     }

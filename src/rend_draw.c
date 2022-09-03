@@ -19,85 +19,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#ifdef REND_API_TRACE
-#   define trace_log(...) printf("TRACE: %s ", __func__); printf("" __VA_ARGS__); printf("\n")
-#else
-#   define trace_log(...)
-#endif
-
-#define TRACE_LEN   32
-
-// internal function declarations
-
-rend_context_t *_context_create(uint16_t width, uint16_t height, uint8_t px_bits);
-void _draw_circle(const rend_context_t *ctx, rend_point2d centre, uint16_t radius, bool fill);
-void _draw_point(const rend_context_t *img, rend_point2d p);
-void _draw_line(const rend_context_t *ctx, rend_point2d p0, rend_point2d p1, bool solid);
-void _draw_clear(const rend_context_t *ctx);
-void _draw_text(const rend_context_t *ctx,
-                    rend_point2d p, const uint8_t *text);
-void _draw_rect(const rend_context_t *ctx,
-                    rend_point2d p0, rend_point2d p1, bool fill);
-
-uint8_t *_buffer_to_string(const rend_context_t *ctx);
-void _buffer_print_stdout(const rend_context_t *ctx);
-
-////////////////////////////////////////////
-// --begin public API function wrappers-- //
-////////////////////////////////////////////
-rend_context_t *rend_context_create(uint16_t width, uint16_t height, uint8_t px_bits)
-{
-    trace_log("[%dx%d] @ %db", width, height, px_bits);
-    _context_create(width, height, px_bits);
-}
-void rend_draw_circle(const rend_context_t *ctx, rend_point2d centre, uint16_t radius, bool fill)
-{
-    trace_log("(%d,%d), radius=%d", centre.x, centre.y);
-    _draw_circle(ctx, centre, radius, fill);
-}
-void rend_draw_point(const rend_context_t *ctx, rend_point2d p)
-{
-    trace_log("(%d,%d)", p.x, p.y);
-    _draw_point(ctx, p);
-}
-void rend_draw_line(const rend_context_t *ctx, rend_point2d p0, rend_point2d p1, bool solid)
-{
-    trace_log("(%d,%d)->(%d,%d)", p0.x, p0.y, p1.x, p1.y);
-    _draw_line(ctx, p0, p1, solid);
-}
-void rend_draw_clear(const rend_context_t *ctx)
-{
-    trace_log();
-    _draw_clear(ctx);
-}
-void rend_draw_text(const rend_context_t *ctx,
-                    rend_point2d p, const uint8_t *text)
-{
-    trace_log("(%d,%d): \"%s\"", p.x, p.y, text);
-    _draw_text(ctx, p, text);
-}
-void rend_draw_rect(const rend_context_t *ctx,
-                    rend_point2d p0, rend_point2d p1, bool fill)
-{
-    trace_log("(%d,%d)->(%d,%d)", p0.x, p0.y, p1.x, p1.y);
-    _draw_rect(ctx, p0, p1, fill);
-}
-uint8_t *rend_buffer_to_string(const rend_context_t *ctx)
-{
-    trace_log();
-    _buffer_to_string(ctx);
-}
-void rend_debug_buffer_print_stdout(const rend_context_t *ctx)
-{
-    trace_log();
-    _buffer_print_stdout(ctx);
-}
-// --end public API function wrappers--   //
-
-////////////////////////////////////////////
-// --begin internal function defs--       //
-////////////////////////////////////////////
-
 // TODO implement image transforms
 // TODO implement for BPP values > 1
 void _set_pixel(const rend_context_t *ctx, rend_point2d p, uint32_t color)
@@ -167,7 +88,7 @@ void _set_pixels_circle(const rend_context_t *ctx, rend_point2d centre, uint8_t 
     }
 }
 
-rend_context_t *_context_create(uint16_t width, uint16_t height, uint8_t px_bits)
+rend_context_t *rend_context_create(uint16_t width, uint16_t height, uint8_t px_bits)
 {
     uint16_t buffer_length;
     if(px_bits == 1) {
@@ -192,17 +113,17 @@ rend_context_t *_context_create(uint16_t width, uint16_t height, uint8_t px_bits
 }
 
 // TODO implement using rend_draw_point so point radius setting is observed
-void _draw_circle(const rend_context_t *ctx, rend_point2d p, uint16_t radius, bool fill)
+void rend_draw_circle(const rend_context_t *ctx, rend_point2d p, uint16_t radius, bool fill)
 {
     _set_pixels_circle(ctx, p, radius, ctx->color_fg);
 }
 
-void _draw_point(const rend_context_t *ctx, rend_point2d p)
+void rend_draw_point(const rend_context_t *ctx, rend_point2d p)
 {
     _set_pixels_circle(ctx, p, ctx->point_radius, ctx->color_fg);
 }
 
-void _draw_line(const rend_context_t *ctx, rend_point2d p0, rend_point2d p1, bool solid)
+void rend_draw_line(const rend_context_t *ctx, rend_point2d p0, rend_point2d p1, bool solid)
 {
     rend_point2d p;
     int8_t sx, sy;
@@ -233,26 +154,26 @@ void _draw_line(const rend_context_t *ctx, rend_point2d p0, rend_point2d p1, boo
     }
 }
 
-void _draw_clear(const rend_context_t *ctx)
+void rend_draw_clear(const rend_context_t *ctx)
 {
     if(ctx->px_bits == 1) {
         uint8_t value = ctx->color_bg? 0xFF : 0x00;
         memset(ctx->buffer, value, ctx->buffer_length);
     }
 }
-void _draw_text(const rend_context_t *ctx,
+void rend_draw_text(const rend_context_t *ctx,
                     rend_point2d origin, const uint8_t *text)
 {
     
 }
-void _draw_rect(const rend_context_t *ctx,
+void rend_draw_rect(const rend_context_t *ctx,
                     rend_point2d p0, rend_point2d p1, bool fill)
 {
     
-    //_rend_debug_api(draw_rect, ctx);
+    _rend_debug_api(draw_rect, ctx);
 }
 
-uint8_t *_buffer_to_string(const rend_context_t *ctx)
+uint8_t *rend_print_buffer(const rend_context_t *ctx)
 {
     size_t out_len;
     if(ctx->px_bits == 1) {
@@ -271,14 +192,12 @@ uint8_t *_buffer_to_string(const rend_context_t *ctx)
     *p = '\0';
     return out;
 }
-void _buffer_print_stdout(const rend_context_t *ctx)
+void rend_debug_buffer_print_stdout(const rend_context_t *ctx)
 {
     uint8_t width = ctx->dim_x;
-    uint8_t *frame = rend_buffer_to_string(ctx);
+    uint8_t *frame = rend_print_buffer(ctx);
     uint8_t *border = calloc(sizeof(uint8_t), width + 1);
     memset(border, '#', width);
     border[width] = '\0';
     printf("%s\n%s%s\n", border, frame, border);
 }
-
-// --end internal function defs--         //
