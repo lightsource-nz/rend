@@ -9,8 +9,10 @@
 
 /*
  *  --> TODO: implement optimized methods for filling horizontal spans of
- *  pixels in memory simultaneously
+ *      pixels in memory simultaneously
+ *      [https://github.com/lightsource-nz/rend/issues/2]
  *  --> TODO: implement mirroring, rotation and other linear transforms
+ *      [https://github.com/lightsource-nz/rend/issues/3]
  *  --> TODO: implement support for grayscale and colour pixel formats
  */
 
@@ -24,8 +26,6 @@
 #else
 #   define trace_log(...)
 #endif
-
-#define TRACE_LEN   32
 
 // internal function declarations
 
