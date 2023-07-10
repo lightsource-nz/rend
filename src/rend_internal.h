@@ -1,10 +1,18 @@
 #ifndef _REND_INTERNAL_H
 #define _REND_INTERNAL_H
 
-#include "rend.h"
+#ifndef _REND_H
+#error "This file must be included after rend.h"
+#endif
 
 #include <stdint.h>
 #include <stdbool.h>
+
+#ifdef REND_API_TRACE
+#   define trace_log(...) printf("TRACE: " __func__ __VA_ARGS__ "\n");
+#else
+#   define trace_log(...)
+#endif
 
 rend_context_t *_context_create(uint16_t width, uint16_t height, uint8_t px_bits);
 

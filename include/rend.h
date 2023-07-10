@@ -1,9 +1,13 @@
 #ifndef _REND_H
 #define _REND_H
 
+#include <light.h>
+
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
+
+Light_Module_Declare(rend);
 
 #define REND_BLACK      (uint16_t)0x0000
 #define REND_WHITE      (uint16_t)0xFFFF

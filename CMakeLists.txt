@@ -1,9 +1,11 @@
 cmake_minimum_required(VERSION 3.12)
-include(pico_sdk_import.cmake)
+include(${LIGHT_PATH}/external/light_preinit.cmake)
 
 project(librend C CXX ASM)
 
-pico_sdk_init()
+if(NOT TARGET light_framework)
+    add_subdirectory(${LIGHT_PATH}/ light_framework)
+endif()
 
 add_subdirectory(demo)
 
@@ -19,6 +21,8 @@ target_sources(
     rend
     INTERFACE
     ${CMAKE_CURRENT_LIST_DIR}/src/rend.c
+    ${CMAKE_CURRENT_LIST_DIR}/src/rend_api.c
+    ${CMAKE_CURRENT_LIST_DIR}/src/rend_draw.c
 )
 
 if(DEFINED REND_RENDER_DEBUG)
@@ -40,4 +44,5 @@ endif()
 target_link_libraries(
     rend
     INTERFACE
+    light_framework
 )
