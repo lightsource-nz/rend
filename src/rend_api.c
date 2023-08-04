@@ -13,10 +13,10 @@
 #include <stdio.h>
 #include <string.h>
 
-rend_context_t *rend_context_create(uint16_t width, uint16_t height, uint8_t px_bits)
+rend_context_t *rend_context_create(const uint8_t *name, uint16_t width, uint16_t height, uint8_t px_bits)
 {
-    trace_log("[%dx%d] @ %db", width, height, px_bits);
-    _context_create(width, height, px_bits);
+    trace_log("\"%s\": [%dx%d] @ %db", width, height, px_bits);
+    _context_create(name, width, height, px_bits);
 }
 void rend_draw_circle(const rend_context_t *ctx, rend_point2d centre, uint16_t radius, bool fill)
 {

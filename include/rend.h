@@ -32,6 +32,7 @@ typedef struct rend_font {
 } rend_font_t;
 
 typedef struct rend_context {
+    const uint8_t *name;
     uint8_t *buffer;
     size_t buffer_length;
     uint16_t dim_x;
@@ -49,7 +50,7 @@ typedef struct rend_point2d {
     uint16_t y;
 } rend_point2d;
 
-rend_context_t *rend_context_create(uint16_t width, uint16_t height, uint8_t px_bits);
+rend_context_t *rend_context_create(const uint8_t *name, uint16_t width, uint16_t height, uint8_t px_bits);
 
 void rend_draw_circle(const rend_context_t *ctx, rend_point2d centre, uint16_t radius, bool fill);
 void rend_draw_point(const rend_context_t *img, rend_point2d p);

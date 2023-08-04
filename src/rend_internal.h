@@ -14,7 +14,7 @@
 #   define trace_log(...)
 #endif
 
-rend_context_t *_context_create(uint16_t width, uint16_t height, uint8_t px_bits);
+rend_context_t *_context_create(const uint8_t *name, uint16_t width, uint16_t height, uint8_t px_bits);
 
 void _draw_circle(const rend_context_t *ctx, rend_point2d centre, uint16_t radius, bool fill);
 void _draw_point(const rend_context_t *img, rend_point2d p);

@@ -88,7 +88,7 @@ void _set_pixels_circle(const rend_context_t *ctx, rend_point2d centre, uint8_t 
     }
 }
 
-rend_context_t *_context_create(uint16_t width, uint16_t height, uint8_t px_bits)
+rend_context_t *_context_create(const uint8_t *name, uint16_t width, uint16_t height, uint8_t px_bits)
 {
     uint16_t buffer_length;
     if(px_bits == 1) {
