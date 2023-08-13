@@ -8,10 +8,13 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#ifdef REND_API_TRACE
-#   define trace_log(...) printf("TRACE: " __func__ __VA_ARGS__ "\n");
+#ifdef REND_DEBUG_API_TRACE
+//#   define trace_log(...) printf("TRACE: " __func__ __VA_ARGS__ "\n");
+#   define trace_log() trace_log_f("","")
+#   define trace_log_f(msg, ...) light_trace(msg, __VA_ARGS__)
 #else
 #   define trace_log(...)
+#   define trace_log_f(msg, ...)
 #endif
 
 rend_context_t *_context_create(const uint8_t *name, uint16_t width, uint16_t height, uint8_t px_bits);

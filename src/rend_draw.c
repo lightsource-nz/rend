@@ -14,7 +14,8 @@
  *  --> TODO: implement support for grayscale and colour pixel formats
  */
 
-#include "rend.h"
+#include <rend.h>
+#include "rend_internal.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -23,6 +24,9 @@
 // TODO implement for BPP values > 1
 void _set_pixel(const rend_context_t *ctx, rend_point2d p, uint32_t color)
 {
+#ifdef REND_DEBUG_PIXEL_TRACE
+    trace_log_f("(%d,%d) = %d", p.x, p.y, color);
+#endif
     // resolve pixel address in buffer, after 2d transforms
     if(ctx->px_bits == 1) {     // monochrome image: 8px per byte
         uint8_t width_bytes = (ctx->dim_x / 8) + ((ctx->dim_x % 8)? 1 : 0);
@@ -33,9 +37,11 @@ void _set_pixel(const rend_context_t *ctx, rend_point2d p, uint32_t color)
             *buf_byte = *buf_byte & ~(0x80 >> p.x % 8);
         }
     }
+/*
 #ifdef REND_DEBUG_DISPLAY_PIXEL
     rend_debug_buffer_print_stdout(ctx);
 #endif
+*/
 }
 
 uint32_t _get_pixel(const rend_context_t *ctx, rend_point2d p)

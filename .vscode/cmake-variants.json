@@ -4,47 +4,67 @@
         "choices": {
             "trace-rp2040": {
                 "short": "Trace - RP2040",
-                "long": "Debug build with logging of API function calls",
+                "long": "Debug build- trace rend API calls",
                 "buildType": "Debug",
                 "settings": {
-                    "REND_API_TRACE": "1"
+                    "LIGHT_RUN_MODE": "TRACE",
+                    "LIGHT_SYSTEM": "PICO_SDK",
+                    "LIGHT_PLATFORM": "TARGET",
+                    "REND_DEBUG_API_TRACE": "1"
                 }
             },
             "trace-host": {
                 "short": "Trace - Host",
-                "long": "Debug build with logging of API function calls",
+                "long": "Host build- trace rend API calls",
                 "buildType": "Debug",
                 "settings": {
-                    "PICO_PLATFORM": "host",
-                    "REND_API_TRACE": "1"
+                    "LIGHT_RUN_MODE": "TRACE",
+                    "LIGHT_SYSTEM": "PICO_SDK",
+                    "LIGHT_PLATFORM": "HOST",
+                    "REND_DEBUG_API_TRACE": "1"
+                }
+            },
+            "pixel-trace-host": {
+                "short": "Render Debug - Host",
+                "long": "Host build- render engine pixel-tracing enabled",
+                "buildType": "Debug",
+                "settings": {
+                    "LIGHT_RUN_MODE": "TRACE",
+                    "LIGHT_SYSTEM": "PICO_SDK",
+                    "LIGHT_PLATFORM": "HOST",
+                    "REND_DEBUG_API_TRACE": "1",
+                    "REND_DEBUG_PIXEL_TRACE": "1"
                 }
             },
             "debug-rp2040": {
                 "short": "Debug - RP2040",
                 "long": "Include debug information",
-                "buildType": "Debug"
+                "buildType": "Debug",
+                "settings": {
+                    "LIGHT_RUN_MODE": "DEBUG",
+                    "LIGHT_SYSTEM": "PICO_SDK",
+                    "LIGHT_PLATFORM": "TARGET"
+                }
             },
             "debug-host": {
                 "short": "Debug - Host",
                 "long": "Include debug information",
                 "buildType": "Debug",
                 "settings": {
-                    "PICO_PLATFORM": "host"
-                }
-            },
-            "render-debug": {
-                "short": "Render Debug - Host",
-                "long": "Run locally on host OS- render API debug enabled",
-                "buildType": "Debug",
-                "settings": {
-                    "PICO_PLATFORM": "host",
-                    "REND_RENDER_DEBUG": "1"
+                    "LIGHT_RUN_MODE": "DEBUG",
+                    "LIGHT_SYSTEM": "PICO_SDK",
+                    "LIGHT_PLATFORM": "HOST"
                 }
             },
             "release": {
                 "short": "Release",
                 "long": "Optimize for speed- exclude debug information",
-                "buildType": "Release"
+                "buildType": "Release",
+                "settings": {
+                    "LIGHT_RUN_MODE": "PRODUCTION",
+                    "LIGHT_SYSTEM": "PICO_SDK",
+                    "LIGHT_PLATFORM": "TARGET"
+                }
             }
         }
     }

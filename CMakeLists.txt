@@ -25,19 +25,19 @@ target_sources(
     ${CMAKE_CURRENT_LIST_DIR}/src/rend_draw.c
 )
 
-if(DEFINED REND_RENDER_DEBUG)
+if(DEFINED REND_DEBUG_PIXEL_TRACE)
     target_compile_definitions(
         rend
         INTERFACE
-        REND_DEBUG_DISPLAY_PIXEL
+        REND_DEBUG_PIXEL_TRACE
     )
 endif()
 
-if(DEFINED REND_API_TRACE)
+if(DEFINED REND_DEBUG_API_TRACE)
     target_compile_definitions(
         rend
         INTERFACE
-        REND_API_TRACE
+        REND_DEBUG_API_TRACE
     )
 endif()
 

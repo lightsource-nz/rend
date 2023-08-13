@@ -35,7 +35,7 @@ static uint8_t rend_demo_main(struct light_application *app)
 #ifdef __HAVE_RP2_HW
         stdio_init_all();
 #endif
-        rend_context_t *ctx = rend_context_create(20, 10, 1);
+        rend_context_t *ctx = rend_context_create("rend_demo", 20, 10, 1);
         ctx->point_radius = 2;
 
         rend_draw_point(ctx, (rend_point2d) {5,5});
