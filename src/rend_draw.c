@@ -82,7 +82,7 @@ void _set_pixels_circle(const rend_context_t *ctx, rend_point2d centre, uint8_t 
     d_e = 3;
     d_se = -2 * radius + 5;
 
-    while(p.y > p.x) {
+    while(p.y - centre.y > p.x - centre.x) {
         _set_octant_pixels(ctx, centre, p, color);
         if(d < 0) {
             d += 2 * p.x + 3;
