@@ -105,6 +105,7 @@ rend_context_t *_context_create(const uint8_t *name, uint16_t width, uint16_t he
         buffer_length = width * height * px_bytes;
     }
     rend_context_t *ctx = malloc(sizeof(rend_context_t));
+    ctx->name = name;
     ctx->dim_x = width;
     ctx->dim_y = height;
     ctx->px_bits = px_bits;
