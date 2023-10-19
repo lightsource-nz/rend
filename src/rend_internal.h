@@ -27,6 +27,8 @@ void _draw_text(const rend_context_t *ctx,
                     rend_point2d p, const uint8_t *text);
 void _draw_rect(const rend_context_t *ctx,
                     rend_point2d p0, rend_point2d p1, bool fill);
+void _draw_rect_norm(const rend_context_t *ctx,
+                    rend_point2d p0, rend_point2d p1, bool fill);
 
 uint8_t *_buffer_to_string(const rend_context_t *ctx);
 void _buffer_print_stdout(const rend_context_t *ctx);

@@ -73,24 +73,21 @@ void _set_octant_pixels(const rend_context_t *ctx, rend_point2d centre, rend_poi
     _set_pixel(ctx, (rend_point2d) { centre.x - dy, centre.y + dx }, color);
     _set_pixel(ctx, (rend_point2d) { centre.x - dx, centre.y + dy }, color);
 }
-
 void _set_pixels_circle(const rend_context_t *ctx, rend_point2d centre, uint8_t radius, uint32_t color)
 {
-    int16_t d, d_e, d_se;
-    rend_point2d p = {centre.x, centre.y + radius};
-    d = 1 - radius;
-    d_e = 3;
-    d_se = -2 * radius + 5;
+    int16_t d = 3 - 2 * radius;
+    rend_point2d p = {0, radius};
 
-    while(p.y - centre.y > p.x - centre.x) {
-        _set_octant_pixels(ctx, centre, p, color);
-        if(d < 0) {
-            d += 2 * p.x + 3;
-        } else {
-            d += 2 * (p.x - p.y) + 5;
-            p.y--;
-        }
+    _set_octant_pixels(ctx, centre, p, color);
+    while(p.y >= p.x) {
         p.x++;
+        if(d > 0)  {
+            p.y--;
+            d += 4 * (p.x - p.y) + 10;
+        } else {
+            d += 4 * p.x + 6;
+        }
+        _set_octant_pixels(ctx, centre, p, color);
     }
 }
 
@@ -173,10 +170,35 @@ void _draw_text(const rend_context_t *ctx,
 {
     
 }
+// tail chaining function to rearrange input geometry
 void _draw_rect(const rend_context_t *ctx,
                     rend_point2d p0, rend_point2d p1, bool fill)
 {
+        // normalize gradient of (p0 -> p1)
+        if(p0.y < p1.y) {
+                if(p0.x > p1.x) {
+                        return _draw_rect_norm(ctx,
+                                    (rend_point2d) {p1.x, p0.y},
+                                    (rend_point2d) {p0.x, p1.y},
+                                    fill);
+                }
+                return _draw_rect_norm(ctx, p1, p0, fill);
+        }
+        return _draw_rect_norm(ctx, p0, p1, fill);
+}
+void _draw_rect_norm(const rend_context_t *ctx,
+                    rend_point2d p0, rend_point2d p1, bool fill)
+{
+        // ASSERT ( p0.y < p1.y && p0.x < p1.x )
+        // assertion: the gradient from p0 -> p1 is positive
+        _draw_line(ctx, p0, (rend_point2d) { p0.x, p1.y }, true);
+        _draw_line(ctx, p0, (rend_point2d) { p1.x, p0.y }, true);
+        _draw_line(ctx, (rend_point2d) { p0.x, p1.y }, p1, true);
+        _draw_line(ctx, (rend_point2d) { p1.x, p0.y }, p1, true);
     
+    
+    //_rend_debug_api(draw_rect, ctx);
+
     //_rend_debug_api(draw_rect, ctx);
 }
 
