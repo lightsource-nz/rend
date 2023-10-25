@@ -59,19 +59,15 @@ uint32_t _get_pixel(const rend_context_t *ctx, rend_point2d p)
 // TODO add optimized version to fill all pixels along horizontal spans using memset
 void _set_octant_pixels(const rend_context_t *ctx, rend_point2d centre, rend_point2d p, uint32_t color)
 {
-    int16_t dx, dy;
-    dx = p.x - centre.x;
-    dy = p.y - centre.y;
-
     // iterate through octants in clockwise order
-    _set_pixel(ctx, p, color);
-    _set_pixel(ctx, (rend_point2d) { centre.x + dy, centre.y + dx }, color);
-    _set_pixel(ctx, (rend_point2d) { centre.x + dy, centre.y - dx }, color);
-    _set_pixel(ctx, (rend_point2d) { centre.x + dx, centre.y - dy }, color);
-    _set_pixel(ctx, (rend_point2d) { centre.x - dx, centre.y - dy }, color);
-    _set_pixel(ctx, (rend_point2d) { centre.x - dy, centre.y - dx }, color);
-    _set_pixel(ctx, (rend_point2d) { centre.x - dy, centre.y + dx }, color);
-    _set_pixel(ctx, (rend_point2d) { centre.x - dx, centre.y + dy }, color);
+    _set_pixel(ctx, (rend_point2d) { centre.x + p.x, centre.y + p.y }, color);
+    _set_pixel(ctx, (rend_point2d) { centre.x + p.y, centre.y + p.x }, color);
+    _set_pixel(ctx, (rend_point2d) { centre.x + p.y, centre.y - p.x }, color);
+    _set_pixel(ctx, (rend_point2d) { centre.x + p.x, centre.y - p.y }, color);
+    _set_pixel(ctx, (rend_point2d) { centre.x - p.x, centre.y - p.y }, color);
+    _set_pixel(ctx, (rend_point2d) { centre.x - p.y, centre.y - p.x }, color);
+    _set_pixel(ctx, (rend_point2d) { centre.x - p.y, centre.y + p.x }, color);
+    _set_pixel(ctx, (rend_point2d) { centre.x - p.x, centre.y + p.y }, color);
 }
 void _set_pixels_circle(const rend_context_t *ctx, rend_point2d centre, uint8_t radius, uint32_t color)
 {
