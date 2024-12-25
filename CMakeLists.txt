@@ -44,5 +44,5 @@ endif()
 target_link_libraries(
     rend
     INTERFACE
-    light_framework
+    light_core
 )
