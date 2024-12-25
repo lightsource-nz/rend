@@ -3,7 +3,7 @@ include(${LIGHT_PATH}/external/light_preinit.cmake)
 
 project(librend C CXX ASM)
 
-if(NOT TARGET light_framework)
+if(NOT TARGET light_core)
     add_subdirectory(${LIGHT_PATH}/ light_framework)
 endif()
 
