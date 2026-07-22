@@ -7,8 +7,10 @@ target_link_libraries(
         rend_demo PUBLIC
         rend
 )
-if(NOT PICO_NO_HARDWARE)
-        pico_enable_stdio_semihosting(rend_demo 1)
-        target_link_libraries(rend_demo PUBLIC pico_stdlib)
+if(LIGHT_SYSTEM STREQUAL PICO_SDK AND LIGHT_PLATFORM STREQUAL TARGET)
+        if(NOT PICO_NO_HARDWARE)
+                pico_enable_stdio_semihosting(rend_demo 1)
+                target_link_libraries(rend_demo PUBLIC pico_stdlib)
+        endif()
+        pico_add_extra_outputs(rend_demo)
 endif()
-pico_add_extra_outputs(rend_demo)

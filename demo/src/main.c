@@ -5,29 +5,28 @@
 #   include <pico/stdio.h>
 #endif
 
-void rend_demo_event(const struct light_module *module, uint8_t event);
+void rend_demo_event(const struct light_module *module, uint8_t event, void *arg);
 static uint8_t rend_demo_main(struct light_application *app);
 
 Light_Application_Define(rend_demo, rend_demo_event, rend_demo_main,
-                                &rend,
-                                &light_framework);
+                                &rend);
 
 int main(int argc, char *argv[])
 {
         light_framework_init();
-        light_framework_run();
+        light_framework_run(argc, argv);
 
         return LIGHT_OK;
 }
 
-void rend_demo_event(const struct light_module *module, uint8_t event)
+void rend_demo_event(const struct light_module *module, uint8_t event, void *arg)
 {
         switch(event) {
-                case LF_EVENT_LOAD:
+                case LF_EVENT_MODULE_LOAD:
                 break;
                 // TODO implement unregister for event hooks
-                case LF_EVENT_UNLOAD:
-                break; 
+                case LF_EVENT_MODULE_UNLOAD:
+                break;
         }
 }
 static uint8_t rend_demo_main(struct light_application *app)
