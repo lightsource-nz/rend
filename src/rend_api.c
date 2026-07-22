@@ -18,6 +18,11 @@ rend_context_t *rend_context_create(const uint8_t *name, uint16_t width, uint16_
     trace_log_f("\"%s\": [%dx%d] @ %db", name, width, height, px_bits);
     _context_create(name, width, height, px_bits);
 }
+void rend_context_set_font(rend_context_t *ctx, const rend_font_t *font)
+{
+    trace_log();
+    _context_set_font(ctx, font);
+}
 void rend_draw_circle(const rend_context_t *ctx, rend_point2d centre, uint16_t radius, bool fill)
 {
     trace_log_f("(%d,%d), radius=%d, fill=%d", centre.x, centre.y, radius, fill);

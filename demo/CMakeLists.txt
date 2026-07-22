@@ -1,7 +1,11 @@
 
 add_executable(rend_demo)
 
-target_sources(rend_demo PUBLIC ${CMAKE_CURRENT_LIST_DIR}/src/main.c)
+target_sources(rend_demo PUBLIC
+        ${CMAKE_CURRENT_LIST_DIR}/src/main.c
+        ${CMAKE_CURRENT_LIST_DIR}/fonts/TypeLightSans_ttf_font.c
+)
+target_include_directories(rend_demo PRIVATE ${CMAKE_CURRENT_LIST_DIR}/fonts)
 
 target_link_libraries(
         rend_demo PUBLIC

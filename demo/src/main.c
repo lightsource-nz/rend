@@ -1,6 +1,8 @@
 #include<rend.h>
 #include<stdio.h>
 
+#include "TypeLightSans_ttf_font.h"
+
 #ifdef __HAVE_RP2_HW
 #   include <pico/stdio.h>
 #endif
@@ -34,11 +36,14 @@ static uint8_t rend_demo_main(struct light_application *app)
 #ifdef __HAVE_RP2_HW
         stdio_init_all();
 #endif
-        rend_context_t *ctx = rend_context_create("rend_demo", 20, 10, 1);
+        rend_context_t *ctx = rend_context_create("rend_demo", 128, 32, 1);
         ctx->point_radius = 2;
 
         rend_draw_point(ctx, (rend_point2d) {5,5});
         rend_draw_line(ctx, (rend_point2d) {8,5}, (rend_point2d) {14,7}, true);
+
+        rend_context_set_font(ctx, &TypeLightSans_ttf_font);
+        rend_draw_text(ctx, (rend_point2d) {2, 14}, "REND");
 
         rend_debug_buffer_print_stdout(ctx);
     

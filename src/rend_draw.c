@@ -105,11 +105,15 @@ rend_context_t *_context_create(const uint8_t *name, uint16_t width, uint16_t he
     ctx->buffer_length = buffer_length;
     ctx->buffer = malloc(buffer_length);
     memset(ctx->buffer, 0, buffer_length);
-    ctx->font = malloc(sizeof(rend_font_t));
-    ctx->font->id = REND_FONT_12;
+    ctx->font = NULL;
     ctx->color_bg = REND_BLACK;
     ctx->color_fg = REND_WHITE;
     return ctx;
+}
+
+void _context_set_font(rend_context_t *ctx, const rend_font_t *font)
+{
+    ctx->font = font;
 }
 
 // TODO implement using rend_draw_point so point radius setting is observed
@@ -164,7 +168,26 @@ void _draw_clear(const rend_context_t *ctx)
 void _draw_text(const rend_context_t *ctx,
                     rend_point2d origin, const uint8_t *text)
 {
-    
+    if(!ctx->font) return;
+    const rend_font_t *font = ctx->font;
+    uint8_t pitch = (font->char_width + 7) / 8;
+    rend_point2d pen = origin;
+    for(const uint8_t *c = text; *c; c++) {
+        if(*c < REND_FONT_GLYPH_TABLE_SIZE) {
+            const uint8_t *glyph = font->glyphs[*c];
+            if(glyph) {
+                for(uint8_t y = 0; y < font->char_height; y++) {
+                    for(uint8_t x = 0; x < font->char_width; x++) {
+                        uint8_t byte = glyph[y * pitch + x / 8];
+                        if((byte >> (7 - (x % 8))) & 1) {
+                            _set_pixel(ctx, (rend_point2d) { pen.x + x, pen.y + y }, ctx->color_fg);
+                        }
+                    }
+                }
+            }
+        }
+        pen.x += font->char_width;
+    }
 }
 // tail chaining function to rearrange input geometry
 void _draw_rect(const rend_context_t *ctx,
