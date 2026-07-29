@@ -28,18 +28,56 @@ Light_Module_Declare(rend);
 #define REND_POINT_7    7
 #define REND_POINT_8    8
 
+// rotation applies only to how logical (dim_x, dim_y) coordinates map onto the
+// underlying physical buffer -- the buffer itself is always allocated at creation-time
+// dimensions, matching whatever the display driver expects. REND_ROTATE_90/270 swap
+// dim_x/dim_y so callers can keep drawing in whatever orientation is natural for their
+// content (e.g. wide text) regardless of how the panel is physically mounted
+#define REND_ROTATE_0     0
+#define REND_ROTATE_90    1
+#define REND_ROTATE_180   2
+#define REND_ROTATE_270   3
+
+// mirrors the logical coordinate space before rotation is applied (see
+// rend_context_set_flip()). REND_FLIP_BOTH is equivalent to REND_ROTATE_180 applied on
+// its own, but composes independently with whatever rotation is also set
+#define REND_FLIP_NONE          0
+#define REND_FLIP_HORIZONTAL    1
+#define REND_FLIP_VERTICAL      2
+#define REND_FLIP_BOTH          3
+
 typedef struct rend_font {
     const uint8_t *const *glyphs;
     uint8_t char_width;
     uint8_t char_height;
 } rend_font_t;
 
+// 2x3 affine transform (the bottom row of the equivalent 3x3 homogeneous matrix is
+// always [0 0 1], so it isn't stored):
+//   phys_x = a*x + b*y + tx
+//   phys_y = c*x + d*y + ty
+// every logical-to-physical coordinate mapping (currently just rotation) is expressed
+// as one of these, computed once when set rather than re-derived per pixel
+typedef struct rend_transform {
+    int32_t a, b, tx;
+    int32_t c, d, ty;
+} rend_transform_t;
+
 typedef struct rend_context {
     const uint8_t *name;
     uint8_t *buffer;
     size_t buffer_length;
+    // dim_x/dim_y are the LOGICAL dimensions callers draw against -- for
+    // REND_ROTATE_90/270 these are swapped relative to phys_dim_x/phys_dim_y, which
+    // describe the buffer's actual fixed layout (set once at creation and never
+    // changed by rotation)
     uint16_t dim_x;
     uint16_t dim_y;
+    uint16_t phys_dim_x;
+    uint16_t phys_dim_y;
+    uint8_t rotation;
+    uint8_t flip;
+    rend_transform_t transform;
     uint8_t px_bits;
     uint8_t px_bytes;
     uint8_t point_radius;
@@ -55,6 +93,16 @@ typedef struct rend_point2d {
 
 rend_context_t *rend_context_create(const uint8_t *name, uint16_t width, uint16_t height, uint8_t px_bits);
 void rend_context_set_font(rend_context_t *ctx, const rend_font_t *font);
+// sets how logical (dim_x, dim_y) coordinates map onto the physical buffer allocated at
+// creation time (see REND_ROTATE_* above). updates ctx->dim_x/dim_y in place; existing
+// buffer content is not transformed, so this is meant to be called once during setup,
+// before any drawing
+void rend_context_set_rotation(rend_context_t *ctx, uint8_t rotation);
+// mirrors the logical coordinate space (see REND_FLIP_* above), composing with whatever
+// rotation is also set -- order doesn't matter, call this and rend_context_set_rotation()
+// in either order. like rotation, existing buffer content is not transformed, so this
+// is meant to be called once during setup, before any drawing
+void rend_context_set_flip(rend_context_t *ctx, uint8_t flip);
 
 void rend_draw_circle(const rend_context_t *ctx, rend_point2d centre, uint16_t radius, bool fill);
 void rend_draw_point(const rend_context_t *img, rend_point2d p);

@@ -10,8 +10,11 @@
 /*
  *  --> TODO: implement optimized methods for filling horizontal spans of
  *  pixels in memory simultaneously
- *  --> TODO: implement mirroring, rotation and other linear transforms
  *  --> TODO: implement support for grayscale and colour pixel formats
+ *
+ *  rotation and mirroring are implemented as composable affine transforms
+ *  (_recompute_transform()/_apply_transform() / rend_context_set_rotation()/
+ *  rend_context_set_flip())
  */
 
 #include <rend.h>
@@ -20,21 +23,113 @@
 #include <stdio.h>
 #include <string.h>
 
-// TODO implement image transforms
 // TODO implement for BPP values > 1
+// composes two affine transforms represented as their equivalent 3x3 homogeneous
+// matrices (bottom row [0 0 1], not stored): result = second . first, i.e. a point is
+// mapped by 'first' and then by 'second'
+static rend_transform_t _compose_transform(rend_transform_t first, rend_transform_t second)
+{
+    return (rend_transform_t) {
+        .a  = second.a * first.a + second.b * first.c,
+        .b  = second.a * first.b + second.b * first.d,
+        .tx = second.a * first.tx + second.b * first.ty + second.tx,
+        .c  = second.c * first.a + second.d * first.c,
+        .d  = second.c * first.b + second.d * first.d,
+        .ty = second.c * first.tx + second.d * first.ty + second.ty
+    };
+}
+// recomputes ctx->transform from ctx->rotation/ctx->flip/phys_dim_x/phys_dim_y. called
+// whenever any of those change (_context_set_rotation()/_context_set_flip()) rather
+// than re-deriving the matrix on every pixel
+static void _recompute_transform(rend_context_t *ctx)
+{
+    // logical dim_x/dim_y depend only on rotation -- flip mirrors within whatever
+    // logical space rotation already established, it doesn't change the dimensions
+    if(ctx->rotation == REND_ROTATE_90 || ctx->rotation == REND_ROTATE_270) {
+        ctx->dim_x = ctx->phys_dim_y;
+        ctx->dim_y = ctx->phys_dim_x;
+    } else {
+        ctx->dim_x = ctx->phys_dim_x;
+        ctx->dim_y = ctx->phys_dim_y;
+    }
+
+    rend_transform_t flip;
+    switch(ctx->flip) {
+    case REND_FLIP_HORIZONTAL:
+        flip = (rend_transform_t) { .a = -1, .b = 0, .tx = ctx->dim_x - 1, .c = 0, .d = 1,  .ty = 0 };
+        break;
+    case REND_FLIP_VERTICAL:
+        flip = (rend_transform_t) { .a = 1,  .b = 0, .tx = 0, .c = 0, .d = -1, .ty = ctx->dim_y - 1 };
+        break;
+    case REND_FLIP_BOTH:
+        flip = (rend_transform_t) { .a = -1, .b = 0, .tx = ctx->dim_x - 1, .c = 0, .d = -1, .ty = ctx->dim_y - 1 };
+        break;
+    case REND_FLIP_NONE:
+    default:
+        flip = (rend_transform_t) { .a = 1, .b = 0, .tx = 0, .c = 0, .d = 1, .ty = 0 };
+        break;
+    }
+
+    rend_transform_t rotate;
+    switch(ctx->rotation) {
+    case REND_ROTATE_90:
+        // logical top edge -> physical right edge
+        rotate = (rend_transform_t) {
+            .a = 0, .b = -1, .tx = ctx->phys_dim_x - 1,
+            .c = 1, .d = 0,  .ty = 0
+        };
+        break;
+    case REND_ROTATE_180:
+        rotate = (rend_transform_t) {
+            .a = -1, .b = 0,  .tx = ctx->phys_dim_x - 1,
+            .c = 0,  .d = -1, .ty = ctx->phys_dim_y - 1
+        };
+        break;
+    case REND_ROTATE_270:
+        // logical top edge -> physical left edge
+        rotate = (rend_transform_t) {
+            .a = 0,  .b = 1, .tx = 0,
+            .c = -1, .d = 0, .ty = ctx->phys_dim_y - 1
+        };
+        break;
+    case REND_ROTATE_0:
+    default:
+        rotate = (rend_transform_t) {
+            .a = 1, .b = 0, .tx = 0,
+            .c = 0, .d = 1, .ty = 0
+        };
+        break;
+    }
+
+    // flip is applied first (in logical space), then rotate maps the (possibly
+    // flipped) logical point onto the physical buffer
+    ctx->transform = _compose_transform(flip, rotate);
+}
+// maps a LOGICAL (dim_x, dim_y)-bounded coordinate onto the PHYSICAL
+// (phys_dim_x, phys_dim_y)-bounded buffer via ctx->transform (see rend.h for the
+// matrix layout). REND_ROTATE_0's identity matrix makes this a no-op multiply
+static rend_point2d _apply_transform(const rend_context_t *ctx, rend_point2d p)
+{
+    const rend_transform_t *m = &ctx->transform;
+    int32_t x = m->a * (int32_t)p.x + m->b * (int32_t)p.y + m->tx;
+    int32_t y = m->c * (int32_t)p.x + m->d * (int32_t)p.y + m->ty;
+    return (rend_point2d) { (uint16_t)x, (uint16_t)y };
+}
+
 void _set_pixel(const rend_context_t *ctx, rend_point2d p, uint32_t color)
 {
 #ifdef REND_DEBUG_PIXEL_TRACE
     trace_log_f("(%d,%d) = %d", p.x, p.y, color);
 #endif
+    rend_point2d phys = _apply_transform(ctx, p);
     // resolve pixel address in buffer, after 2d transforms
     if(ctx->px_bits == 1) {     // monochrome image: 8px per byte
-        uint8_t width_bytes = (ctx->dim_x / 8) + ((ctx->dim_x % 8)? 1 : 0);
-        uint8_t *buf_byte = &ctx->buffer[p.y * width_bytes + p.x / 8];
+        uint8_t width_bytes = (ctx->phys_dim_x / 8) + ((ctx->phys_dim_x % 8)? 1 : 0);
+        uint8_t *buf_byte = &ctx->buffer[phys.y * width_bytes + phys.x / 8];
         if(color) {
-            *buf_byte = *buf_byte | (1 << p.x % 8);
+            *buf_byte = *buf_byte | (1 << phys.x % 8);
         } else {
-            *buf_byte = *buf_byte & ~(1 << p.x % 8);
+            *buf_byte = *buf_byte & ~(1 << phys.x % 8);
         }
     }
 /*
@@ -46,28 +141,40 @@ void _set_pixel(const rend_context_t *ctx, rend_point2d p, uint32_t color)
 
 uint32_t _get_pixel(const rend_context_t *ctx, rend_point2d p)
 {
+    rend_point2d phys = _apply_transform(ctx, p);
     if(ctx->px_bits == 1) {     // monochrome image: 8px per byte
-        uint8_t width_bytes = (ctx->dim_x / 8) + ((ctx->dim_x % 8)? 1 : 0);
-        //return ctx->buffer[p.y * width_bytes + p.x / 8] & (0x80 >> p.x % 8);
-        uint8_t px_block = ctx->buffer[p.y * width_bytes + p.x / 8];
-        uint32_t out = px_block & (1 << p.x % 8);
+        uint8_t width_bytes = (ctx->phys_dim_x / 8) + ((ctx->phys_dim_x % 8)? 1 : 0);
+        uint8_t px_block = ctx->buffer[phys.y * width_bytes + phys.x / 8];
+        uint32_t out = px_block & (1 << phys.x % 8);
         return out;
     }
     return 0;
 }
 
+// rend_point2d's fields are uint16_t, so an expression like "centre.x - p.y" that goes
+// negative (e.g. drawing a circle/point near the top-left of the canvas) silently
+// wraps to a huge unsigned value once stored back into a rend_point2d -- _set_pixel()
+// would then index far outside the buffer. this clips any such point instead of
+// wrapping, computing each candidate coordinate as a signed value first
+static void _set_pixel_clipped(const rend_context_t *ctx, int32_t x, int32_t y, uint32_t color)
+{
+    if(x < 0 || y < 0 || x >= ctx->dim_x || y >= ctx->dim_y)
+        return;
+    _set_pixel(ctx, (rend_point2d) { (uint16_t)x, (uint16_t)y }, color);
+}
 // TODO add optimized version to fill all pixels along horizontal spans using memset
 void _set_octant_pixels(const rend_context_t *ctx, rend_point2d centre, rend_point2d p, uint32_t color)
 {
+    int32_t cx = centre.x, cy = centre.y, px = p.x, py = p.y;
     // iterate through octants in clockwise order
-    _set_pixel(ctx, (rend_point2d) { centre.x + p.x, centre.y + p.y }, color);
-    _set_pixel(ctx, (rend_point2d) { centre.x + p.y, centre.y + p.x }, color);
-    _set_pixel(ctx, (rend_point2d) { centre.x + p.y, centre.y - p.x }, color);
-    _set_pixel(ctx, (rend_point2d) { centre.x + p.x, centre.y - p.y }, color);
-    _set_pixel(ctx, (rend_point2d) { centre.x - p.x, centre.y - p.y }, color);
-    _set_pixel(ctx, (rend_point2d) { centre.x - p.y, centre.y - p.x }, color);
-    _set_pixel(ctx, (rend_point2d) { centre.x - p.y, centre.y + p.x }, color);
-    _set_pixel(ctx, (rend_point2d) { centre.x - p.x, centre.y + p.y }, color);
+    _set_pixel_clipped(ctx, cx + px, cy + py, color);
+    _set_pixel_clipped(ctx, cx + py, cy + px, color);
+    _set_pixel_clipped(ctx, cx + py, cy - px, color);
+    _set_pixel_clipped(ctx, cx + px, cy - py, color);
+    _set_pixel_clipped(ctx, cx - px, cy - py, color);
+    _set_pixel_clipped(ctx, cx - py, cy - px, color);
+    _set_pixel_clipped(ctx, cx - py, cy + px, color);
+    _set_pixel_clipped(ctx, cx - px, cy + py, color);
 }
 void _set_pixels_circle(const rend_context_t *ctx, rend_point2d centre, uint8_t radius, uint32_t color)
 {
@@ -101,6 +208,11 @@ rend_context_t *_context_create(const uint8_t *name, uint16_t width, uint16_t he
     ctx->name = name;
     ctx->dim_x = width;
     ctx->dim_y = height;
+    ctx->phys_dim_x = width;
+    ctx->phys_dim_y = height;
+    ctx->rotation = REND_ROTATE_0;
+    ctx->flip = REND_FLIP_NONE;
+    _recompute_transform(ctx);
     ctx->px_bits = px_bits;
     ctx->buffer_length = buffer_length;
     ctx->buffer = malloc(buffer_length);
@@ -114,6 +226,20 @@ rend_context_t *_context_create(const uint8_t *name, uint16_t width, uint16_t he
 void _context_set_font(rend_context_t *ctx, const rend_font_t *font)
 {
     ctx->font = font;
+}
+
+void _context_set_rotation(rend_context_t *ctx, uint8_t rotation)
+{
+    ctx->rotation = rotation;
+    // dim_x/dim_y are (re)derived inside _recompute_transform(), since flip also
+    // depends on them and both need to stay in sync with whichever changed last
+    _recompute_transform(ctx);
+}
+
+void _context_set_flip(rend_context_t *ctx, uint8_t flip)
+{
+    ctx->flip = flip;
+    _recompute_transform(ctx);
 }
 
 // TODO implement using rend_draw_point so point radius setting is observed

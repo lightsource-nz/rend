@@ -19,6 +19,8 @@
 
 rend_context_t *_context_create(const uint8_t *name, uint16_t width, uint16_t height, uint8_t px_bits);
 void _context_set_font(rend_context_t *ctx, const rend_font_t *font);
+void _context_set_rotation(rend_context_t *ctx, uint8_t rotation);
+void _context_set_flip(rend_context_t *ctx, uint8_t flip);
 
 void _draw_circle(const rend_context_t *ctx, rend_point2d centre, uint16_t radius, bool fill);
 void _draw_point(const rend_context_t *img, rend_point2d p);
