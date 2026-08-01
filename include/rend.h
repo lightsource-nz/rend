@@ -66,6 +66,9 @@ typedef struct rend_transform {
 typedef struct rend_context {
     const uint8_t *name;
     uint8_t *buffer;
+    // NULL unless rend_context_enable_double_buffer() has been called -- the other half
+    // of the front/back pair swapped by rend_context_swap_buffers()
+    uint8_t *buffer_back;
     size_t buffer_length;
     // dim_x/dim_y are the LOGICAL dimensions callers draw against -- for
     // REND_ROTATE_90/270 these are swapped relative to phys_dim_x/phys_dim_y, which
@@ -103,6 +106,15 @@ void rend_context_set_rotation(rend_context_t *ctx, uint8_t rotation);
 // in either order. like rotation, existing buffer content is not transformed, so this
 // is meant to be called once during setup, before any drawing
 void rend_context_set_flip(rend_context_t *ctx, uint8_t flip);
+// allocates a second buffer_length-sized buffer alongside ctx->buffer, for callers who
+// want to render the next frame while a previous one is still being flushed to a display
+// (see rend_context_swap_buffers()). optional -- most callers don't need this
+void rend_context_enable_double_buffer(rend_context_t *ctx);
+// flips ctx->buffer to the other allocated buffer (front/back swap). returns false
+// (no-op) if double-buffering hasn't been enabled -- there's nothing to swap to. callers
+// driving an async display update from this context should confirm nothing is still
+// reading the target buffer first (see light_display_render_context_busy())
+bool rend_context_swap_buffers(rend_context_t *ctx);
 
 void rend_draw_circle(const rend_context_t *ctx, rend_point2d centre, uint16_t radius, bool fill);
 void rend_draw_point(const rend_context_t *img, rend_point2d p);

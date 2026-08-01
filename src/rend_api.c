@@ -33,6 +33,16 @@ void rend_context_set_flip(rend_context_t *ctx, uint8_t flip)
     trace_log_f("flip=%d", flip);
     _context_set_flip(ctx, flip);
 }
+void rend_context_enable_double_buffer(rend_context_t *ctx)
+{
+    trace_log();
+    _context_enable_double_buffer(ctx);
+}
+bool rend_context_swap_buffers(rend_context_t *ctx)
+{
+    trace_log();
+    return _context_swap_buffers(ctx);
+}
 void rend_draw_circle(const rend_context_t *ctx, rend_point2d centre, uint16_t radius, bool fill)
 {
     trace_log_f("(%d,%d), radius=%d, fill=%d", centre.x, centre.y, radius, fill);

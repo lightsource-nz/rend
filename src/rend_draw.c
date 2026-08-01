@@ -217,6 +217,7 @@ rend_context_t *_context_create(const uint8_t *name, uint16_t width, uint16_t he
     ctx->buffer_length = buffer_length;
     ctx->buffer = malloc(buffer_length);
     memset(ctx->buffer, 0, buffer_length);
+    ctx->buffer_back = NULL;
     ctx->font = NULL;
     ctx->color_bg = REND_BLACK;
     ctx->color_fg = REND_WHITE;
@@ -226,6 +227,24 @@ rend_context_t *_context_create(const uint8_t *name, uint16_t width, uint16_t he
 void _context_set_font(rend_context_t *ctx, const rend_font_t *font)
 {
     ctx->font = font;
+}
+
+void _context_enable_double_buffer(rend_context_t *ctx)
+{
+    if(ctx->buffer_back)
+        return;
+    ctx->buffer_back = malloc(ctx->buffer_length);
+    memset(ctx->buffer_back, 0, ctx->buffer_length);
+}
+
+bool _context_swap_buffers(rend_context_t *ctx)
+{
+    if(!ctx->buffer_back)
+        return false;
+    uint8_t *front = ctx->buffer;
+    ctx->buffer = ctx->buffer_back;
+    ctx->buffer_back = front;
+    return true;
 }
 
 void _context_set_rotation(rend_context_t *ctx, uint8_t rotation)
