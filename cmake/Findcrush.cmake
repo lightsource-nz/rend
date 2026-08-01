@@ -55,9 +55,15 @@ if (NOT TARGET crush)
         set(FONT_CRUSHER_PATH ${font_crusher_SOURCE_DIR} CACHE PATH "path to the root directory of the font-crusher project" FORCE)
     endif()
 
-    set(crush_BINARY_DIR ${CMAKE_BINARY_DIR}/font-crusher)
+    set(crush_BINARY_DIR ${CMAKE_BINARY_DIR}/_deps/font-crusher)
     set(crushBuild_TARGET crushBuild)
     set(crush_TARGET crush)
+
+    if (CMAKE_HOST_WIN32)
+        set(crush_EXECUTABLE ${crush_BINARY_DIR}/bin/crush.exe)
+    else()
+        set(crush_EXECUTABLE ${crush_BINARY_DIR}/bin/crush)
+    endif()
 
     if (NOT TARGET ${crushBuild_TARGET})
         ExternalProject_Add(${crushBuild_TARGET}
@@ -79,17 +85,15 @@ if (NOT TARGET crush)
                 # font-crusher is only ever needed as a host tool, so only build
                 # the `crush` executable itself, not its tests/demos
                 BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --target crush
+                # tells Ninja this step actually produces crush_EXECUTABLE, so a fresh
+                # (cold) build can depend on the file directly, not just order-only
+                BUILD_BYPRODUCTS ${crush_EXECUTABLE}
                 INSTALL_COMMAND "" # nothing to install, we run straight out of the build tree
                 BUILD_ALWAYS 1 # force dependency checking
                 EXCLUDE_FROM_ALL TRUE
                 )
     endif()
 
-    if (CMAKE_HOST_WIN32)
-        set(crush_EXECUTABLE ${crush_BINARY_DIR}/bin/crush.exe)
-    else()
-        set(crush_EXECUTABLE ${crush_BINARY_DIR}/bin/crush)
-    endif()
     add_executable(${crush_TARGET} IMPORTED GLOBAL)
     set_property(TARGET ${crush_TARGET} PROPERTY IMPORTED_LOCATION
             ${crush_EXECUTABLE})
