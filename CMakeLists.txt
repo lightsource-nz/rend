@@ -33,6 +33,12 @@ function(rend_init_font_crusher)
 
     if (TARGET crush)
         set(crush_FOUND 1 PARENT_SCOPE)
+        # Findcrush.cmake may have just re-pointed FONT_CRUSHER_PATH at a freshly
+        # fetched checkout (via CACHE ... FORCE) when no local one was found -- that
+        # update only lands in this function's own scope, so it has to be forwarded
+        # to the caller explicitly or the caller keeps seeing its original (possibly
+        # nonexistent) path and silently fails to find CrushTools.cmake there
+        set(FONT_CRUSHER_PATH ${FONT_CRUSHER_PATH} PARENT_SCOPE)
     else()
         message("No crush (font-crusher) found")
     endif()
