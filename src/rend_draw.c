@@ -334,36 +334,31 @@ void _draw_text(const rend_context_t *ctx,
         pen.x += font->char_width;
     }
 }
-// tail chaining function to rearrange input geometry
+// tail chaining function to rearrange input geometry -- callers may pass either diagonal's
+// two corners in any order, so normalize independently per axis into (top-left, bottom-right)
+// before handing off to _draw_rect_norm(), which assumes that canonical form
 void _draw_rect(const rend_context_t *ctx,
                     rend_point2d p0, rend_point2d p1, bool fill)
 {
-        // normalize gradient of (p0 -> p1)
-        if(p0.y < p1.y) {
-                if(p0.x > p1.x) {
-                        return _draw_rect_norm(ctx,
-                                    (rend_point2d) {p1.x, p0.y},
-                                    (rend_point2d) {p0.x, p1.y},
-                                    fill);
-                }
-                return _draw_rect_norm(ctx, p1, p0, fill);
-        }
-        return _draw_rect_norm(ctx, p0, p1, fill);
+        rend_point2d top_left     = { p0.x < p1.x ? p0.x : p1.x, p0.y < p1.y ? p0.y : p1.y };
+        rend_point2d bottom_right = { p0.x > p1.x ? p0.x : p1.x, p0.y > p1.y ? p0.y : p1.y };
+        return _draw_rect_norm(ctx, top_left, bottom_right, fill);
 }
 void _draw_rect_norm(const rend_context_t *ctx,
                     rend_point2d p0, rend_point2d p1, bool fill)
 {
         // ASSERT ( p0.y < p1.y && p0.x < p1.x )
         // assertion: the gradient from p0 -> p1 is positive
+        if(fill) {
+                for(uint16_t y = p0.y; y <= p1.y; y++) {
+                        _draw_line(ctx, (rend_point2d) { p0.x, y }, (rend_point2d) { p1.x, y }, true);
+                }
+                return;
+        }
         _draw_line(ctx, p0, (rend_point2d) { p0.x, p1.y }, true);
         _draw_line(ctx, p0, (rend_point2d) { p1.x, p0.y }, true);
         _draw_line(ctx, (rend_point2d) { p0.x, p1.y }, p1, true);
         _draw_line(ctx, (rend_point2d) { p1.x, p0.y }, p1, true);
-    
-    
-    //_rend_debug_api(draw_rect, ctx);
-
-    //_rend_debug_api(draw_rect, ctx);
 }
 
 uint8_t *_buffer_to_string(const rend_context_t *ctx)
