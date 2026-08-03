@@ -46,6 +46,6 @@ static uint8_t rend_demo_main(struct light_application *app)
         rend_draw_text(ctx, (rend_point2d) {2, 14}, "REND");
 
         rend_debug_buffer_print_stdout(ctx);
-    
+
         return LF_STATUS_SHUTDOWN;
 }
