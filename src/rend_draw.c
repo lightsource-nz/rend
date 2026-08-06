@@ -131,6 +131,10 @@ void _set_pixel(const rend_context_t *ctx, rend_point2d p, uint32_t color)
         } else {
             *buf_byte = *buf_byte & ~(1 << phys.x % 8);
         }
+    } else if(ctx->px_bits == 16) {     // RGB565, big-endian (matches ST7789's native RAMWR order)
+        uint32_t offset = ((uint32_t)phys.y * ctx->phys_dim_x + phys.x) * 2;
+        ctx->buffer[offset]     = (uint8_t)(color >> 8);
+        ctx->buffer[offset + 1] = (uint8_t)(color & 0xFF);
     }
 /*
 #ifdef REND_DEBUG_DISPLAY_PIXEL
@@ -147,6 +151,9 @@ uint32_t _get_pixel(const rend_context_t *ctx, rend_point2d p)
         uint8_t px_block = ctx->buffer[phys.y * width_bytes + phys.x / 8];
         uint32_t out = px_block & (1 << phys.x % 8);
         return out;
+    } else if(ctx->px_bits == 16) {
+        uint32_t offset = ((uint32_t)phys.y * ctx->phys_dim_x + phys.x) * 2;
+        return ((uint32_t)ctx->buffer[offset] << 8) | ctx->buffer[offset + 1];
     }
     return 0;
 }
@@ -196,7 +203,10 @@ void _set_pixels_circle(const rend_context_t *ctx, rend_point2d centre, uint8_t 
 
 rend_context_t *_context_create(const uint8_t *name, uint16_t width, uint16_t height, uint8_t px_bits)
 {
-    uint16_t buffer_length;
+    // matches ctx->buffer_length's own type (size_t) -- a plain uint16_t here silently
+    // wrapped for any buffer over 64KB (e.g. a 240x280 16bpp context is 134400 bytes),
+    // allocating and memset-ing far too little and corrupting memory on first use
+    size_t buffer_length;
     if(px_bits == 1) {
         uint16_t width_bytes = width % 8 == 0? width / 8: width / 8 + 1;
         buffer_length = width_bytes * height;
@@ -308,6 +318,13 @@ void _draw_clear(const rend_context_t *ctx)
     if(ctx->px_bits == 1) {
         uint8_t value = ctx->color_bg? 0xFF : 0x00;
         memset(ctx->buffer, value, ctx->buffer_length);
+    } else if(ctx->px_bits == 16) {
+        uint8_t hi = (uint8_t)(ctx->color_bg >> 8);
+        uint8_t lo = (uint8_t)(ctx->color_bg & 0xFF);
+        for(size_t i = 0; i < ctx->buffer_length; i += 2) {
+            ctx->buffer[i]     = hi;
+            ctx->buffer[i + 1] = lo;
+        }
     }
 }
 void _draw_text(const rend_context_t *ctx,
