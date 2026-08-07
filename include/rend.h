@@ -115,6 +115,16 @@ void rend_context_enable_double_buffer(rend_context_t *ctx);
 // driving an async display update from this context should confirm nothing is still
 // reading the target buffer first (see light_display_render_context_busy())
 bool rend_context_swap_buffers(rend_context_t *ctx);
+// maps a LOGICAL axis-aligned rect onto the PHYSICAL buffer's coordinate space, writing
+// the result back as a normalised inclusive (min, max) pair. rotation and flip reorder
+// which logical corner lands at which physical extreme, so the corners are transformed
+// and then min/max'd rather than assumed to stay in order. every transform this supports
+// maps axis-aligned rects to axis-aligned rects, so transforming two opposite corners
+// recovers the exact physical bounds -- there's no need to visit all four. added for
+// display drivers doing partial-region updates, which address the physical buffer while
+// their callers naturally think in logical coordinates
+void rend_transform_rect(const rend_context_t *ctx, rend_point2d p0, rend_point2d p1,
+                         rend_point2d *out_min, rend_point2d *out_max);
 
 void rend_draw_circle(const rend_context_t *ctx, rend_point2d centre, uint16_t radius, bool fill);
 void rend_draw_point(const rend_context_t *img, rend_point2d p);

@@ -116,6 +116,18 @@ static rend_point2d _apply_transform(const rend_context_t *ctx, rend_point2d p)
     return (rend_point2d) { (uint16_t)x, (uint16_t)y };
 }
 
+void rend_transform_rect(const rend_context_t *ctx, rend_point2d p0, rend_point2d p1,
+                         rend_point2d *out_min, rend_point2d *out_max)
+{
+    rend_point2d a = _apply_transform(ctx, p0);
+    rend_point2d b = _apply_transform(ctx, p1);
+
+    out_min->x = a.x < b.x ? a.x : b.x;
+    out_min->y = a.y < b.y ? a.y : b.y;
+    out_max->x = a.x > b.x ? a.x : b.x;
+    out_max->y = a.y > b.y ? a.y : b.y;
+}
+
 void _set_pixel(const rend_context_t *ctx, rend_point2d p, uint32_t color)
 {
 #ifdef REND_DEBUG_PIXEL_TRACE
