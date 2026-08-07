@@ -4,10 +4,53 @@ set(LIGHT_PATH "${CMAKE_CURRENT_LIST_DIR}/../light_framework_mk3" CACHE PATH "pa
 get_filename_component(LIGHT_PATH "${LIGHT_PATH}" REALPATH BASE_DIR "${CMAKE_CURRENT_LIST_DIR}")
 include(${LIGHT_PATH}/external/light_preinit.cmake)
 
+set(FONT_CRUSHER_PATH "${CMAKE_CURRENT_LIST_DIR}/../font-crusher" CACHE PATH "path to the root directory of the font-crusher project")
+get_filename_component(FONT_CRUSHER_PATH "${FONT_CRUSHER_PATH}" REALPATH BASE_DIR "${CMAKE_CURRENT_LIST_DIR}")
+option(REND_NO_FONT_CRUSHER "Disable use/requirement of the font-crusher (crush) tool" OFF)
+
 project(librend C CXX ASM)
 
 if(NOT TARGET light_core)
     add_subdirectory(${LIGHT_PATH}/ light_framework)
+endif()
+
+# Check crush (font-crusher) is available, building it as a host-native
+# ExternalProject "utility" target if not already found -- mirrors how the
+# Pico SDK lazily builds/finds picotool via pico_init_picotool()
+function(rend_init_font_crusher)
+    if (NOT TARGET crush AND NOT DEFINED crush_FOUND)
+        set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_LIST_DIR}/cmake)
+        find_package(crush MODULE)
+    endif()
+
+    if (TARGET crush AND NOT DEFINED ENV{_CRUSH_FOUND_THIS_RUN})
+        # Internal environment variable to prevent printing multiple times
+        set(ENV{_CRUSH_FOUND_THIS_RUN} 1)
+
+        get_property(crush_location TARGET crush PROPERTY IMPORTED_LOCATION)
+        message("Using crush (font-crusher) from ${crush_location}")
+    endif()
+
+    if (TARGET crush)
+        set(crush_FOUND 1 PARENT_SCOPE)
+        # Findcrush.cmake may have just re-pointed FONT_CRUSHER_PATH at a freshly
+        # fetched checkout (via CACHE ... FORCE) when no local one was found -- that
+        # update only lands in this function's own scope, so it has to be forwarded
+        # to the caller explicitly or the caller keeps seeing its original (possibly
+        # nonexistent) path and silently fails to find CrushTools.cmake there
+        set(FONT_CRUSHER_PATH ${FONT_CRUSHER_PATH} PARENT_SCOPE)
+    else()
+        message("No crush (font-crusher) found")
+    endif()
+endfunction()
+
+if(NOT REND_NO_FONT_CRUSHER)
+    rend_init_font_crusher()
+    if(crush_FOUND AND EXISTS "${FONT_CRUSHER_PATH}/cmake/CrushTools.cmake")
+        # provides crush_invoke()/crush_add_font_target() etc. for turning font files
+        # into rend_font_t sources at build time
+        include(${FONT_CRUSHER_PATH}/cmake/CrushTools.cmake)
+    endif()
 endif()
 
 add_subdirectory(demo)
