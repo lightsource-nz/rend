@@ -555,7 +555,7 @@ static uint32_t _isqrt(uint32_t n)
 }
 
 void _draw_rect_rounded(const rend_context_t *ctx, rend_point2d p0, rend_point2d p1,
-                        uint16_t radius, bool fill)
+                        uint16_t radius, uint8_t corners, bool fill)
 {
     int32_t x0 = p0.x < p1.x ? p0.x : p1.x;
     int32_t x1 = p0.x > p1.x ? p0.x : p1.x;
@@ -571,50 +571,63 @@ void _draw_rect_rounded(const rend_context_t *ctx, rend_point2d p0, rend_point2d
     int32_t r = radius;
     if(r > half_w) r = half_w;
     if(r > half_h) r = half_h;
-    if(r <= 0) {
+    if(r <= 0 || corners == REND_CORNER_NONE) {
         _draw_rect_norm(ctx, (rend_point2d) { (uint16_t)x0, (uint16_t)y0 },
                              (rend_point2d) { (uint16_t)x1, (uint16_t)y1 }, fill);
         return;
     }
 
-    // the four arc centres, each inset by r from its own corner
-    rend_point2d c_tl = { (uint16_t)(x0 + r), (uint16_t)(y0 + r) };
-    rend_point2d c_tr = { (uint16_t)(x1 - r), (uint16_t)(y0 + r) };
-    rend_point2d c_br = { (uint16_t)(x1 - r), (uint16_t)(y1 - r) };
-    rend_point2d c_bl = { (uint16_t)(x0 + r), (uint16_t)(y1 - r) };
+    // how far each corner's arc is inset -- 0 for a corner left square, which makes the edge
+    // and span arithmetic below uniform instead of needing a branch per corner
+    int32_t tl = (corners & REND_CORNER_TOP_LEFT)     ? r : 0;
+    int32_t tr = (corners & REND_CORNER_TOP_RIGHT)    ? r : 0;
+    int32_t br = (corners & REND_CORNER_BOTTOM_RIGHT) ? r : 0;
+    int32_t bl = (corners & REND_CORNER_BOTTOM_LEFT)  ? r : 0;
 
     if(fill) {
-        // the middle band is full width; only the r rows at each end are narrowed, by
-        // r - sqrt(r^2 - dy^2) -- the horizontal distance from the corner arc's centre out
-        // to the arc at that row
-        for(int32_t y = y0 + r; y <= y1 - r; y++)
-            _set_span_clipped(ctx, x0, x1, y, ctx->color_fg);
-        for(int32_t dy = 1; dy <= r; dy++) {
-            int32_t dx = (int32_t)_isqrt((uint32_t)(r * r - dy * dy));
-            int32_t inset = r - dx;
-            _set_span_clipped(ctx, x0 + inset, x1 - inset, c_tl.y - dy, ctx->color_fg);
-            _set_span_clipped(ctx, x0 + inset, x1 - inset, c_bl.y + dy, ctx->color_fg);
+        // one pass over the rows, each narrowed by however far the arcs at ITS end reach in.
+        // the clamp above guarantees y0+r <= y1-r, so the top and bottom bands never overlap
+        // and a row can be in at most one of them
+        for(int32_t y = y0; y <= y1; y++) {
+            int32_t li = 0, ri = 0;
+            if(y < y0 + r) {
+                int32_t dy = y0 + r - y;
+                int32_t d = r - (int32_t)_isqrt((uint32_t)(r * r - dy * dy));
+                if(tl) li = d;
+                if(tr) ri = d;
+            } else if(y > y1 - r) {
+                int32_t dy = y - (y1 - r);
+                int32_t d = r - (int32_t)_isqrt((uint32_t)(r * r - dy * dy));
+                if(bl) li = d;
+                if(br) ri = d;
+            }
+            _set_span_clipped(ctx, x0 + li, x1 - ri, y, ctx->color_fg);
         }
         return;
     }
 
-    // straight edges, each shortened by r at both ends so it stops exactly where its two
-    // arcs start. the arcs' own endpoints land on these same pixels (cos/sin of 0, 90, 180
-    // and 270 are exact in the table), so the joins close without overlap arithmetic
-    _draw_line(ctx, (rend_point2d) { (uint16_t)(x0 + r), (uint16_t)y0 },
-                    (rend_point2d) { (uint16_t)(x1 - r), (uint16_t)y0 }, true);
-    _draw_line(ctx, (rend_point2d) { (uint16_t)(x0 + r), (uint16_t)y1 },
-                    (rend_point2d) { (uint16_t)(x1 - r), (uint16_t)y1 }, true);
-    _draw_line(ctx, (rend_point2d) { (uint16_t)x0, (uint16_t)(y0 + r) },
-                    (rend_point2d) { (uint16_t)x0, (uint16_t)(y1 - r) }, true);
-    _draw_line(ctx, (rend_point2d) { (uint16_t)x1, (uint16_t)(y0 + r) },
-                    (rend_point2d) { (uint16_t)x1, (uint16_t)(y1 - r) }, true);
+    // straight edges, each shortened only at the ends whose corner is actually rounded, so it
+    // stops exactly where its arc starts. the arcs' own endpoints land on these same pixels
+    // (cos/sin of 0, 90, 180 and 270 are exact in the table), so the joins close without
+    // overlap arithmetic
+    _draw_line(ctx, (rend_point2d) { (uint16_t)(x0 + tl), (uint16_t)y0 },
+                    (rend_point2d) { (uint16_t)(x1 - tr), (uint16_t)y0 }, true);
+    _draw_line(ctx, (rend_point2d) { (uint16_t)(x0 + bl), (uint16_t)y1 },
+                    (rend_point2d) { (uint16_t)(x1 - br), (uint16_t)y1 }, true);
+    _draw_line(ctx, (rend_point2d) { (uint16_t)x0, (uint16_t)(y0 + tl) },
+                    (rend_point2d) { (uint16_t)x0, (uint16_t)(y1 - bl) }, true);
+    _draw_line(ctx, (rend_point2d) { (uint16_t)x1, (uint16_t)(y0 + tr) },
+                    (rend_point2d) { (uint16_t)x1, (uint16_t)(y1 - br) }, true);
 
     // 0 points right and angles run clockwise on screen, so 180->270 is the top-LEFT quarter
-    _draw_arc(ctx, c_tl, (uint16_t)r, 180, 270);
-    _draw_arc(ctx, c_tr, (uint16_t)r, 270, 360);
-    _draw_arc(ctx, c_br, (uint16_t)r, 0, 90);
-    _draw_arc(ctx, c_bl, (uint16_t)r, 90, 180);
+    if(tl) _draw_arc(ctx, (rend_point2d) { (uint16_t)(x0 + r), (uint16_t)(y0 + r) },
+                     (uint16_t)r, 180, 270);
+    if(tr) _draw_arc(ctx, (rend_point2d) { (uint16_t)(x1 - r), (uint16_t)(y0 + r) },
+                     (uint16_t)r, 270, 360);
+    if(br) _draw_arc(ctx, (rend_point2d) { (uint16_t)(x1 - r), (uint16_t)(y1 - r) },
+                     (uint16_t)r, 0, 90);
+    if(bl) _draw_arc(ctx, (rend_point2d) { (uint16_t)(x0 + r), (uint16_t)(y1 - r) },
+                     (uint16_t)r, 90, 180);
 }
 
 void _draw_line(const rend_context_t *ctx, rend_point2d p0, rend_point2d p1, bool solid)

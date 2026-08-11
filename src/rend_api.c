@@ -58,7 +58,13 @@ void rend_draw_rect_rounded(const rend_context_t *ctx, rend_point2d p0, rend_poi
                             uint16_t radius, bool fill)
 {
     trace_log_f("(%d,%d)->(%d,%d), radius=%d", p0.x, p0.y, p1.x, p1.y, radius);
-    _draw_rect_rounded(ctx, p0, p1, radius, fill);
+    _draw_rect_rounded(ctx, p0, p1, radius, REND_CORNER_ALL, fill);
+}
+void rend_draw_rect_rounded_corners(const rend_context_t *ctx, rend_point2d p0, rend_point2d p1,
+                            uint16_t radius, uint8_t corners, bool fill)
+{
+    trace_log_f("(%d,%d)->(%d,%d), radius=%d, corners=0x%x", p0.x, p0.y, p1.x, p1.y, radius, corners);
+    _draw_rect_rounded(ctx, p0, p1, radius, corners, fill);
 }
 void rend_draw_point(const rend_context_t *ctx, rend_point2d p)
 {

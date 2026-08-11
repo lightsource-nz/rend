@@ -178,11 +178,32 @@ void rend_draw_circle(const rend_context_t *ctx, rend_point2d centre, uint16_t r
 // is cheaper than de-duplicating and harmless for every drawing operation rend has
 void rend_draw_arc(const rend_context_t *ctx, rend_point2d centre, uint16_t radius,
                    int16_t start_deg, int16_t end_deg);
+// which corners rend_draw_rect_rounded_corners() rounds; the rest stay square
+#define REND_CORNER_NONE         0x0
+#define REND_CORNER_TOP_LEFT     0x1
+#define REND_CORNER_TOP_RIGHT    0x2
+#define REND_CORNER_BOTTOM_RIGHT 0x4
+#define REND_CORNER_BOTTOM_LEFT  0x8
+#define REND_CORNER_TOP          (REND_CORNER_TOP_LEFT | REND_CORNER_TOP_RIGHT)
+#define REND_CORNER_BOTTOM       (REND_CORNER_BOTTOM_LEFT | REND_CORNER_BOTTOM_RIGHT)
+#define REND_CORNER_LEFT         (REND_CORNER_TOP_LEFT | REND_CORNER_BOTTOM_LEFT)
+#define REND_CORNER_RIGHT        (REND_CORNER_TOP_RIGHT | REND_CORNER_BOTTOM_RIGHT)
+#define REND_CORNER_ALL          0xF
+
 // a rectangle with rounded corners: the four straight edges shortened by the radius, plus a
 // quarter arc at each inset corner. the radius is clamped to half the shorter side, so an
 // over-large one degenerates into a stadium rather than drawing nonsense
 void rend_draw_rect_rounded(const rend_context_t *ctx, rend_point2d p0, rend_point2d p1,
                             uint16_t radius, bool fill);
+// the same, rounding only the corners named in `corners` (see REND_CORNER_* above) and
+// leaving the others square.
+//
+// this exists for content sitting flush against the inside of a rounded container: a row at
+// the bottom of a rounded panel wants its BOTTOM corners to follow the panel's curve while
+// its top corners stay square against the row above it. rounding all four instead would
+// pinch the row away from its neighbour for no reason
+void rend_draw_rect_rounded_corners(const rend_context_t *ctx, rend_point2d p0, rend_point2d p1,
+                            uint16_t radius, uint8_t corners, bool fill);
 void rend_draw_point(const rend_context_t *img, rend_point2d p);
 void rend_draw_line(const rend_context_t *ctx, rend_point2d p0, rend_point2d p1, bool solid);
 void rend_draw_clear(const rend_context_t *ctx);
