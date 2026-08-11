@@ -125,6 +125,16 @@ bool rend_context_swap_buffers(rend_context_t *ctx);
 // their callers naturally think in logical coordinates
 void rend_transform_rect(const rend_context_t *ctx, rend_point2d p0, rend_point2d p1,
                          rend_point2d *out_min, rend_point2d *out_max);
+// the inverse of the above, for a single point: maps a PHYSICAL buffer coordinate back into
+// the LOGICAL space callers draw in. added for input rather than output -- a touch panel
+// reports in the display's own physical frame, while everything layered above rend thinks
+// in logical coordinates, and under rotation those are not the same point.
+//
+// exact, with no rounding: every rotation and flip matrix has entries in {-1, 0, 1} and
+// determinant +/-1, and composing them preserves that, so the inverse is integer arithmetic
+// (and 1/det == det). the result is clamped into dim_x/dim_y, since a touch panel whose
+// coordinate range is slightly larger than the display's can otherwise map outside it
+rend_point2d rend_untransform_point(const rend_context_t *ctx, rend_point2d phys);
 
 void rend_draw_circle(const rend_context_t *ctx, rend_point2d centre, uint16_t radius, bool fill);
 void rend_draw_point(const rend_context_t *img, rend_point2d p);

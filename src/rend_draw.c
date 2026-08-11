@@ -116,6 +116,37 @@ static rend_point2d _apply_transform(const rend_context_t *ctx, rend_point2d p)
     return (rend_point2d) { (uint16_t)x, (uint16_t)y };
 }
 
+// inverse of _apply_transform(). solving
+//     px = a*x + b*y + tx
+//     py = c*x + d*y + ty
+// for (x, y) gives the adjugate over the determinant; because det is always +/-1 here
+// (see _recompute_transform() -- rotations and flips only, and their composition), the
+// division degenerates into a multiply by det itself, so this stays exact integer maths
+rend_point2d rend_untransform_point(const rend_context_t *ctx, rend_point2d phys)
+{
+    const rend_transform_t *m = &ctx->transform;
+    int32_t det = m->a * m->d - m->b * m->c;
+    if(det == 0)
+        // not reachable for any transform this builds, but a zero determinant would mean
+        // an unrecoverable mapping -- return the input rather than divide by zero
+        return phys;
+
+    int32_t px = (int32_t)phys.x - m->tx;
+    int32_t py = (int32_t)phys.y - m->ty;
+    int32_t x = (m->d * px - m->b * py) * det;
+    int32_t y = (m->a * py - m->c * px) * det;
+
+    // a touch panel's coordinate range doesn't have to match the display's exactly, so a
+    // point can land just outside the logical canvas -- clamp rather than let it wrap when
+    // it becomes rend_point2d's unsigned fields
+    if(x < 0) x = 0;
+    if(y < 0) y = 0;
+    if(x > (int32_t)ctx->dim_x - 1) x = ctx->dim_x - 1;
+    if(y > (int32_t)ctx->dim_y - 1) y = ctx->dim_y - 1;
+
+    return (rend_point2d) { (uint16_t)x, (uint16_t)y };
+}
+
 void rend_transform_rect(const rend_context_t *ctx, rend_point2d p0, rend_point2d p1,
                          rend_point2d *out_min, rend_point2d *out_max)
 {
