@@ -147,6 +147,113 @@ rend_point2d rend_untransform_point(const rend_context_t *ctx, rend_point2d phys
     return (rend_point2d) { (uint16_t)x, (uint16_t)y };
 }
 
+// sine of 0..90 degrees in Q15, one entry per degree. a table rather than a series because
+// the only consumer is an animation stepping through whole degrees, and 182 bytes of rodata
+// is cheaper than any runtime approximation -- and keeps this free of floating point, which
+// matters on the FPU-less RP2040 as much as the RP2350
+static const int16_t _sin_q15[91] = {
+        0,   572,  1144,  1715,  2286,  2856,  3425,  3993,  4560,  5126,
+     5690,  6252,  6813,  7371,  7927,  8481,  9032,  9580, 10126, 10668,
+    11207, 11743, 12275, 12803, 13328, 13848, 14364, 14876, 15383, 15886,
+    16384, 16877, 17364, 17847, 18324, 18795, 19261, 19720, 20174, 20622,
+    21063, 21498, 21926, 22348, 22763, 23170, 23571, 23965, 24351, 24730,
+    25102, 25466, 25822, 26170, 26510, 26842, 27166, 27482, 27789, 28088,
+    28378, 28660, 28932, 29196, 29452, 29698, 29935, 30163, 30382, 30592,
+    30792, 30983, 31164, 31336, 31499, 31651, 31795, 31928, 32052, 32166,
+    32270, 32365, 32449, 32524, 32588, 32643, 32688, 32723, 32748, 32763,
+    32767
+};
+// wraps any angle into 0..359 and reflects through the quadrants, so only a quarter turn
+// has to be tabulated
+static int32_t _sin_deg_q15(int16_t angle_deg)
+{
+    int32_t a = angle_deg % 360;
+    if(a < 0) a += 360;
+    if(a <= 90)  return _sin_q15[a];
+    if(a <= 180) return _sin_q15[180 - a];
+    if(a <= 270) return -_sin_q15[a - 180];
+    return -_sin_q15[360 - a];
+}
+static int32_t _cos_deg_q15(int16_t angle_deg)
+{
+    return _sin_deg_q15((int16_t)(angle_deg + 90));
+}
+
+int32_t rend_scale_inscribed(const rend_context_t *ctx, int16_t angle_deg)
+{
+    int32_t s = _sin_deg_q15(angle_deg);
+    int32_t c = _cos_deg_q15(angle_deg);
+    if(s < 0) s = -s;
+    if(c < 0) c = -c;
+
+    int32_t w = ctx->phys_dim_x;
+    int32_t h = ctx->phys_dim_y;
+    // the rotated image's bounding box, still in Q15 pixels. each axis has to fit the
+    // buffer's matching dimension, so the binding constraint is whichever needs shrinking
+    // further
+    int32_t need_w = w * c + h * s;
+    int32_t need_h = w * s + h * c;
+    if(need_w <= 0 || need_h <= 0)
+        return REND_SCALE_ONE;
+
+    // (dimension << 30) / need, in 64-bit: shifting need_w down to whole pixels first would
+    // be simpler but rounds the divisor, and rounding a DIVISOR down inflates the result --
+    // an inscribed scale that comes out even slightly too large clips the corners it exists
+    // to preserve
+    int32_t fit_w = (int32_t)(((int64_t)w << 30) / need_w);
+    int32_t fit_h = (int32_t)(((int64_t)h << 30) / need_h);
+    int32_t fit = fit_w < fit_h ? fit_w : fit_h;
+    return fit > REND_SCALE_ONE ? REND_SCALE_ONE : fit;
+}
+
+void rend_blit_rotated(const rend_context_t *ctx, const uint8_t *src,
+                       int16_t angle_deg, int32_t scale_q15)
+{
+    // 16bpp only -- a 1bpp source would need bit addressing on both ends, and no mono panel
+    // in this tree rotates (they have no orientation sensor)
+    if(ctx->px_bits != 16 || !src || scale_q15 <= 0)
+        return;
+
+    int32_t w = ctx->phys_dim_x;
+    int32_t h = ctx->phys_dim_y;
+    int32_t cx = w / 2;
+    int32_t cy = h / 2;
+
+    // the INVERSE rotation, folded with the inverse of the scale: sampling backwards means
+    // rotating by -angle and dividing by the scale, and doing both here keeps the inner loop
+    // to two multiply-accumulates per axis
+    int32_t inv = (int32_t)(((int64_t)REND_SCALE_ONE * REND_SCALE_ONE) / scale_q15);
+    int32_t cos_i = (int32_t)(((int64_t)_cos_deg_q15(angle_deg) * inv) >> 15);
+    int32_t sin_i = (int32_t)(((int64_t)_sin_deg_q15(angle_deg) * inv) >> 15);
+
+    for(int32_t dy = 0; dy < h; dy++) {
+        int32_t ry = dy - cy;
+        // the row's source origin, stepped along x by (cos_i, -sin_i) rather than recomputed
+        // per pixel -- the same incremental trick a DDA uses
+        int32_t sx = (-cx * cos_i + ry * sin_i) + (cx << 15);
+        int32_t sy = ( cx * sin_i + ry * cos_i) + (cy << 15);
+        uint8_t *dst_row = &ctx->buffer[(uint32_t)dy * w * 2];
+
+        for(int32_t dx = 0; dx < w; dx++, sx += cos_i, sy -= sin_i) {
+            // rounded, not truncated. this is nearest-neighbour sampling, so rounding is
+            // what "nearest" means -- and it is load-bearing rather than cosmetic: Q15
+            // cannot represent 1.0 (the table's sin(90) is 32767), so at 0 degrees the
+            // step is one ulp short of a whole pixel and the deficit accumulates until it
+            // crosses a pixel boundary exactly at the centre, shifting the entire right
+            // half of the image over by one. rounding absorbs that
+            int32_t px = (sx + 16384) >> 15;
+            int32_t py = (sy + 16384) >> 15;
+            // outside the source: leave the destination pixel untouched, so a caller that
+            // cleared first gets background rather than smeared edge pixels
+            if(px < 0 || py < 0 || px >= w || py >= h)
+                continue;
+            const uint8_t *s = &src[((uint32_t)py * w + px) * 2];
+            dst_row[dx * 2]     = s[0];
+            dst_row[dx * 2 + 1] = s[1];
+        }
+    }
+}
+
 void rend_transform_rect(const rend_context_t *ctx, rend_point2d p0, rend_point2d p1,
                          rend_point2d *out_min, rend_point2d *out_max)
 {

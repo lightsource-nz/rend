@@ -136,6 +136,34 @@ void rend_transform_rect(const rend_context_t *ctx, rend_point2d p0, rend_point2
 // coordinate range is slightly larger than the display's can otherwise map outside it
 rend_point2d rend_untransform_point(const rend_context_t *ctx, rend_point2d phys);
 
+// 1.0 in the Q15 fixed-point scale rend_blit_rotated() takes
+#define REND_SCALE_ONE  32768
+
+// samples `src` into ctx's own buffer, rotated by `angle_deg` about the buffer centre and
+// scaled by `scale_q15` (REND_SCALE_ONE == 1:1). `src` must be a buffer of exactly ctx's
+// geometry and pixel format -- typically the context's own back buffer, holding a previously
+// rendered frame.
+//
+// works in PHYSICAL buffer space and ignores ctx->transform entirely: this rotates an image,
+// it does not draw through the logical-to-physical mapping. that is what makes it usable for
+// animating between two rotations, where the transform is precisely the thing in flux.
+//
+// INVERSE sampled -- for every destination pixel it maps back into the source and takes the
+// nearest pixel. mapping source pixels forward instead would scatter them and leave unwritten
+// gaps that widen with the scale factor. destination pixels whose source falls outside the
+// buffer are left as they are, so clear first if that matters.
+//
+// SCALE IS NOT DECORATION: a w*h image rotated by 45 degrees needs a box of
+// w*|sin| + h*|cos| on a side, so at 1:1 the corners fall outside a fixed buffer and are cut
+// off part-way through a turn. pass rend_scale_inscribed() to keep the whole image visible.
+//
+// 16bpp only for now; a 1bpp path can follow if a mono panel ever needs one
+void rend_blit_rotated(const rend_context_t *ctx, const uint8_t *src,
+                       int16_t angle_deg, int32_t scale_q15);
+// the largest scale at which a rotation by `angle_deg` still fits entirely inside a
+// buffer of ctx's dimensions -- REND_SCALE_ONE at 0/180 degrees, smallest at 45
+int32_t rend_scale_inscribed(const rend_context_t *ctx, int16_t angle_deg);
+
 void rend_draw_circle(const rend_context_t *ctx, rend_point2d centre, uint16_t radius, bool fill);
 void rend_draw_point(const rend_context_t *img, rend_point2d p);
 void rend_draw_line(const rend_context_t *ctx, rend_point2d p0, rend_point2d p1, bool solid);
