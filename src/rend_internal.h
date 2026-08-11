@@ -25,6 +25,10 @@ void _context_enable_double_buffer(rend_context_t *ctx);
 bool _context_swap_buffers(rend_context_t *ctx);
 
 void _draw_circle(const rend_context_t *ctx, rend_point2d centre, uint16_t radius, bool fill);
+void _draw_arc(const rend_context_t *ctx, rend_point2d centre, uint16_t radius,
+                    int16_t start_deg, int16_t end_deg);
+void _draw_rect_rounded(const rend_context_t *ctx, rend_point2d p0, rend_point2d p1,
+                    uint16_t radius, bool fill);
 void _draw_point(const rend_context_t *img, rend_point2d p);
 void _draw_line(const rend_context_t *ctx, rend_point2d p0, rend_point2d p1, bool solid);
 void _draw_clear(const rend_context_t *ctx);

@@ -48,6 +48,18 @@ void rend_draw_circle(const rend_context_t *ctx, rend_point2d centre, uint16_t r
     trace_log_f("(%d,%d), radius=%d, fill=%d", centre.x, centre.y, radius, fill);
     _draw_circle(ctx, centre, radius, fill);
 }
+void rend_draw_arc(const rend_context_t *ctx, rend_point2d centre, uint16_t radius,
+                   int16_t start_deg, int16_t end_deg)
+{
+    trace_log_f("(%d,%d), radius=%d, %d..%d deg", centre.x, centre.y, radius, start_deg, end_deg);
+    _draw_arc(ctx, centre, radius, start_deg, end_deg);
+}
+void rend_draw_rect_rounded(const rend_context_t *ctx, rend_point2d p0, rend_point2d p1,
+                            uint16_t radius, bool fill)
+{
+    trace_log_f("(%d,%d)->(%d,%d), radius=%d", p0.x, p0.y, p1.x, p1.y, radius);
+    _draw_rect_rounded(ctx, p0, p1, radius, fill);
+}
 void rend_draw_point(const rend_context_t *ctx, rend_point2d p)
 {
     trace_log_f("(%d,%d)", p.x, p.y);

@@ -178,6 +178,26 @@ static int32_t _cos_deg_q15(int16_t angle_deg)
 {
     return _sin_deg_q15((int16_t)(angle_deg + 90));
 }
+// the same sine at sub-degree resolution, taking Q8 degrees (degrees << 8) and interpolating
+// linearly between the table's whole-degree entries. arcs need this where rend_blit_rotated()
+// did not: an arc of radius r steps by about 1/r radians, which is under a degree as soon as
+// r passes 60, and quantising those steps back onto whole degrees would pile several samples
+// onto one pixel and leave gaps between the rest. linear interpolation error on sine at one
+// degree spacing peaks around 4e-5 -- three orders of magnitude below the pixel it feeds
+static int32_t _sin_deg_q8_q15(int32_t deg_q8)
+{
+    // arithmetic shift floors, including for negative angles, which is exactly what the
+    // fractional part has to be measured up from
+    int32_t whole = deg_q8 >> 8;
+    int32_t frac  = deg_q8 & 0xFF;
+    int32_t s0 = _sin_deg_q15((int16_t)(whole % 360));
+    int32_t s1 = _sin_deg_q15((int16_t)((whole + 1) % 360));
+    return s0 + (((s1 - s0) * frac) >> 8);
+}
+static int32_t _cos_deg_q8_q15(int32_t deg_q8)
+{
+    return _sin_deg_q8_q15(deg_q8 + (90 << 8));
+}
 
 int32_t rend_scale_inscribed(const rend_context_t *ctx, int16_t angle_deg)
 {
@@ -333,9 +353,49 @@ void _set_octant_pixels(const rend_context_t *ctx, rend_point2d centre, rend_poi
     _set_pixel_clipped(ctx, cx - py, cy + px, color);
     _set_pixel_clipped(ctx, cx - px, cy + py, color);
 }
-void _set_pixels_circle(const rend_context_t *ctx, rend_point2d centre, uint8_t radius, uint32_t color)
+// a horizontal run, clipped like _set_pixel_clipped() and for the same reason: a span
+// covering a circle near an edge extends past it, and the endpoints are computed signed
+static void _set_span_clipped(const rend_context_t *ctx, int32_t x0, int32_t x1, int32_t y,
+                              uint32_t color)
 {
-    int16_t d = 3 - 2 * radius;
+    if(y < 0 || y >= (int32_t)ctx->dim_y)
+        return;
+    if(x0 > x1) { int32_t t = x0; x0 = x1; x1 = t; }
+    if(x1 < 0 || x0 >= (int32_t)ctx->dim_x)
+        return;
+    if(x0 < 0) x0 = 0;
+    if(x1 > (int32_t)ctx->dim_x - 1) x1 = ctx->dim_x - 1;
+    for(int32_t x = x0; x <= x1; x++)
+        _set_pixel(ctx, (rend_point2d) { (uint16_t)x, (uint16_t)y }, color);
+}
+// the filled counterpart of _set_octant_pixels(): the same midpoint iteration, but each pair
+// of mirrored points becomes the horizontal run between them. filling from the outline's own
+// spans is what keeps the two exactly consistent -- a disc drawn this way has precisely the
+// extent its outline would have had
+static void _set_spans_circle(const rend_context_t *ctx, rend_point2d centre, uint16_t radius,
+                              uint32_t color)
+{
+    int32_t cx = centre.x, cy = centre.y;
+    int32_t d = 3 - 2 * (int32_t)radius;
+    int32_t px = 0, py = radius;
+
+    while(py >= px) {
+        _set_span_clipped(ctx, cx - px, cx + px, cy + py, color);
+        _set_span_clipped(ctx, cx - px, cx + px, cy - py, color);
+        _set_span_clipped(ctx, cx - py, cx + py, cy + px, color);
+        _set_span_clipped(ctx, cx - py, cx + py, cy - px, color);
+        px++;
+        if(d > 0) {
+            py--;
+            d += 4 * (px - py) + 10;
+        } else {
+            d += 4 * px + 6;
+        }
+    }
+}
+void _set_pixels_circle(const rend_context_t *ctx, rend_point2d centre, uint16_t radius, uint32_t color)
+{
+    int32_t d = 3 - 2 * (int32_t)radius;
     rend_point2d p = {0, radius};
 
     _set_octant_pixels(ctx, centre, p, color);
@@ -424,12 +484,137 @@ void _context_set_flip(rend_context_t *ctx, uint8_t flip)
 // TODO implement using rend_draw_point so point radius setting is observed
 void _draw_circle(const rend_context_t *ctx, rend_point2d p, uint16_t radius, bool fill)
 {
-    _set_pixels_circle(ctx, p, radius, ctx->color_fg);
+    // fill was accepted and then ignored here for a long time, so every caller asking for a
+    // disc quietly got a ring -- including screen-test's animated "circle"
+    if(fill)
+        _set_spans_circle(ctx, p, radius, ctx->color_fg);
+    else
+        _set_pixels_circle(ctx, p, radius, ctx->color_fg);
 }
 
 void _draw_point(const rend_context_t *ctx, rend_point2d p)
 {
-    _set_pixels_circle(ctx, p, ctx->point_radius, ctx->color_fg);
+    // a point is a solid dot; it drew as a tiny ring only because _draw_circle() had no fill
+    // path to share
+    _set_spans_circle(ctx, p, ctx->point_radius, ctx->color_fg);
+}
+
+void _draw_arc(const rend_context_t *ctx, rend_point2d centre, uint16_t radius,
+               int16_t start_deg, int16_t end_deg)
+{
+    if(radius == 0) {
+        _set_pixel_clipped(ctx, centre.x, centre.y, ctx->color_fg);
+        return;
+    }
+
+    int32_t start = start_deg % 360;
+    if(start < 0) start += 360;
+    int32_t end = end_deg % 360;
+    if(end < 0) end += 360;
+    // an end before the start sweeps the long way round rather than drawing nothing, and
+    // coincident angles mean the whole circle -- which is what arc(0, 360) reduces to once
+    // both ends wrap
+    int32_t span = end - start;
+    if(span <= 0) span += 360;
+
+    int32_t start_q8 = start << 8;
+    int32_t span_q8 = span << 8;
+    // arc length is r*theta, so a one-pixel step is 1/r radians -- but sampling at exactly
+    // that spacing is not enough. rounding moves a coordinate by up to half a pixel, so two
+    // samples a whole pixel apart can round to pixels TWO apart and leave a hole. at half
+    // that spacing the rounded samples can never differ by more than one on either axis,
+    // which is the no-gap guarantee this function owes rend_draw_rect_rounded().
+    // 1144/2^24 is pi/(180*256): Q8 degrees to radians. 64-bit because r*span_q8 alone
+    // reaches 6e9 at the extremes of both
+    int32_t steps = (int32_t)(((int64_t)radius * span_q8 * 1144) >> 24) * 2 + 1;
+
+    for(int32_t i = 0; i <= steps; i++) {
+        // recomputed from the endpoints every step rather than accumulated, so the final
+        // sample lands exactly on end_deg no matter how many steps it took to get there --
+        // an accumulated angle would drift by a fraction of a step and open the joins that
+        // rounded rectangles depend on being closed
+        int32_t theta = start_q8 + (int32_t)(((int64_t)span_q8 * i) / steps);
+        int32_t x = centre.x + (((int32_t)radius * _cos_deg_q8_q15(theta) + 16384) >> 15);
+        int32_t y = centre.y + (((int32_t)radius * _sin_deg_q8_q15(theta) + 16384) >> 15);
+        _set_pixel_clipped(ctx, x, y, ctx->color_fg);
+    }
+}
+
+// integer square root, for the filled rounded rect's corner rows. Newton's method on
+// integers, converging in a handful of iterations for anything a display can hold
+static uint32_t _isqrt(uint32_t n)
+{
+    if(n == 0)
+        return 0;
+    uint32_t x = n, y = (x + 1) / 2;
+    while(y < x) {
+        x = y;
+        y = (x + n / x) / 2;
+    }
+    return x;
+}
+
+void _draw_rect_rounded(const rend_context_t *ctx, rend_point2d p0, rend_point2d p1,
+                        uint16_t radius, bool fill)
+{
+    int32_t x0 = p0.x < p1.x ? p0.x : p1.x;
+    int32_t x1 = p0.x > p1.x ? p0.x : p1.x;
+    int32_t y0 = p0.y < p1.y ? p0.y : p1.y;
+    int32_t y1 = p0.y > p1.y ? p0.y : p1.y;
+
+    // clamp to half the shorter side: beyond that the corner arcs would overlap each other
+    // and the straight edges would have negative length. clamping degenerates the shape into
+    // a stadium (or a circle, for a square), which is the sensible limit of what was asked
+    // for rather than a drawing made of nonsense coordinates
+    int32_t half_w = (x1 - x0) / 2;
+    int32_t half_h = (y1 - y0) / 2;
+    int32_t r = radius;
+    if(r > half_w) r = half_w;
+    if(r > half_h) r = half_h;
+    if(r <= 0) {
+        _draw_rect_norm(ctx, (rend_point2d) { (uint16_t)x0, (uint16_t)y0 },
+                             (rend_point2d) { (uint16_t)x1, (uint16_t)y1 }, fill);
+        return;
+    }
+
+    // the four arc centres, each inset by r from its own corner
+    rend_point2d c_tl = { (uint16_t)(x0 + r), (uint16_t)(y0 + r) };
+    rend_point2d c_tr = { (uint16_t)(x1 - r), (uint16_t)(y0 + r) };
+    rend_point2d c_br = { (uint16_t)(x1 - r), (uint16_t)(y1 - r) };
+    rend_point2d c_bl = { (uint16_t)(x0 + r), (uint16_t)(y1 - r) };
+
+    if(fill) {
+        // the middle band is full width; only the r rows at each end are narrowed, by
+        // r - sqrt(r^2 - dy^2) -- the horizontal distance from the corner arc's centre out
+        // to the arc at that row
+        for(int32_t y = y0 + r; y <= y1 - r; y++)
+            _set_span_clipped(ctx, x0, x1, y, ctx->color_fg);
+        for(int32_t dy = 1; dy <= r; dy++) {
+            int32_t dx = (int32_t)_isqrt((uint32_t)(r * r - dy * dy));
+            int32_t inset = r - dx;
+            _set_span_clipped(ctx, x0 + inset, x1 - inset, c_tl.y - dy, ctx->color_fg);
+            _set_span_clipped(ctx, x0 + inset, x1 - inset, c_bl.y + dy, ctx->color_fg);
+        }
+        return;
+    }
+
+    // straight edges, each shortened by r at both ends so it stops exactly where its two
+    // arcs start. the arcs' own endpoints land on these same pixels (cos/sin of 0, 90, 180
+    // and 270 are exact in the table), so the joins close without overlap arithmetic
+    _draw_line(ctx, (rend_point2d) { (uint16_t)(x0 + r), (uint16_t)y0 },
+                    (rend_point2d) { (uint16_t)(x1 - r), (uint16_t)y0 }, true);
+    _draw_line(ctx, (rend_point2d) { (uint16_t)(x0 + r), (uint16_t)y1 },
+                    (rend_point2d) { (uint16_t)(x1 - r), (uint16_t)y1 }, true);
+    _draw_line(ctx, (rend_point2d) { (uint16_t)x0, (uint16_t)(y0 + r) },
+                    (rend_point2d) { (uint16_t)x0, (uint16_t)(y1 - r) }, true);
+    _draw_line(ctx, (rend_point2d) { (uint16_t)x1, (uint16_t)(y0 + r) },
+                    (rend_point2d) { (uint16_t)x1, (uint16_t)(y1 - r) }, true);
+
+    // 0 points right and angles run clockwise on screen, so 180->270 is the top-LEFT quarter
+    _draw_arc(ctx, c_tl, (uint16_t)r, 180, 270);
+    _draw_arc(ctx, c_tr, (uint16_t)r, 270, 360);
+    _draw_arc(ctx, c_br, (uint16_t)r, 0, 90);
+    _draw_arc(ctx, c_bl, (uint16_t)r, 90, 180);
 }
 
 void _draw_line(const rend_context_t *ctx, rend_point2d p0, rend_point2d p1, bool solid)

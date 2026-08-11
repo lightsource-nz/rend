@@ -165,6 +165,24 @@ void rend_blit_rotated(const rend_context_t *ctx, const uint8_t *src,
 int32_t rend_scale_inscribed(const rend_context_t *ctx, int16_t angle_deg);
 
 void rend_draw_circle(const rend_context_t *ctx, rend_point2d centre, uint16_t radius, bool fill);
+// draws the part of a circle between two angles.
+//
+// ANGLE CONVENTION: 0 degrees points RIGHT (+x), and angles increase CLOCKWISE as seen on
+// screen -- so 90 is straight DOWN. that follows from rend's y growing downward, and is
+// stated explicitly because the opposite convention is equally defensible in the abstract
+// and this is the first thing anyone gets wrong. angles outside 0..360 are wrapped, and
+// end < start sweeps the long way round rather than drawing nothing.
+//
+// the step is derived from the radius so the arc never has gaps (see the implementation);
+// the cost is that a pixel may be written twice where two steps land in the same cell, which
+// is cheaper than de-duplicating and harmless for every drawing operation rend has
+void rend_draw_arc(const rend_context_t *ctx, rend_point2d centre, uint16_t radius,
+                   int16_t start_deg, int16_t end_deg);
+// a rectangle with rounded corners: the four straight edges shortened by the radius, plus a
+// quarter arc at each inset corner. the radius is clamped to half the shorter side, so an
+// over-large one degenerates into a stadium rather than drawing nonsense
+void rend_draw_rect_rounded(const rend_context_t *ctx, rend_point2d p0, rend_point2d p1,
+                            uint16_t radius, bool fill);
 void rend_draw_point(const rend_context_t *img, rend_point2d p);
 void rend_draw_line(const rend_context_t *ctx, rend_point2d p0, rend_point2d p1, bool solid);
 void rend_draw_clear(const rend_context_t *ctx);
