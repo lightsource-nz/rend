@@ -92,3 +92,16 @@ target_link_libraries(
     INTERFACE
     light_core
 )
+
+# CTest is enabled here only when rend is the top-level project, so it can be built and tested
+# on its own. included as a submodule, the enclosing project owns that decision -- calling
+# include(CTest) from a subdirectory would define BUILD_TESTING behind its back
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    include(CTest)
+endif()
+
+# tests are host-only: they draw into a buffer and then inspect it, so the binary has to run
+# on the machine that built it. a cross-compiled one would need an emulator to say anything
+if(BUILD_TESTING AND LIGHT_PLATFORM STREQUAL HOST)
+    add_subdirectory(test)
+endif()
