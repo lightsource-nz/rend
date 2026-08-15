@@ -637,6 +637,199 @@ static void test_rect_rounded_corner_mask(void)
 }
 
 // the cases CTest registers one at a time. the names are duplicated in test/CMakeLists.txt
+// ---------------------------------------------------------------------------------------------
+//   THE COORDINATE TRANSFORM. Everything above draws; this pair maps between the logical space
+// an application thinks in and the physical buffer a panel scans out. Coverage showed
+// rend_untransform_point() and rend_transform_rect() at 0% -- untested, despite untransform
+// being what turns a touch controller's report into the widget the user actually pressed.
+//
+//   the round-trip property is the one that matters. A tap is untransformed to logical space,
+// hit-tested against rects that were laid out in logical space, and the widget is then drawn
+// through the forward transform. If the two disagree at any rotation, the interface responds to
+// presses somewhere other than where it drew itself -- which is a genuinely confusing bug to
+// chase from the symptom, and one this project has already spent a session on.
+// ---------------------------------------------------------------------------------------------
+
+static const uint8_t _rotations[] = { REND_ROTATE_0, REND_ROTATE_90, REND_ROTATE_180, REND_ROTATE_270 };
+static const char *_rotation_name(uint8_t r)
+{
+        switch(r) {
+        case REND_ROTATE_0:   return "0";
+        case REND_ROTATE_90:  return "90";
+        case REND_ROTATE_180: return "180";
+        default:              return "270";
+        }
+}
+
+static void test_transform_round_trip(void)
+{
+        //   deliberately non-square: a square canvas hides every axis swap, because getting
+        // x and y the wrong way round still lands inside the buffer and still round-trips
+        rend_context_t *ctx = make_ctx(48, 32);
+
+        for(size_t r = 0; r < sizeof(_rotations); r++) {
+                rend_context_set_rotation(ctx, _rotations[r]);
+
+                for(uint16_t y = 0; y < ctx->dim_y; y += 3) {
+                        for(uint16_t x = 0; x < ctx->dim_x; x += 3) {
+                                rend_point2d logical = { x, y };
+                                rend_point2d phys_min, phys_max;
+                                // transform_rect of a degenerate rect is the forward mapping of
+                                // the single point, whichever way the axes were flipped
+                                rend_transform_rect(ctx, logical, logical, &phys_min, &phys_max);
+
+                                rend_point2d back = rend_untransform_point(ctx, phys_min);
+                                CHECK(back.x == x && back.y == y,
+                                        "rotation %s: (%u,%u) -> (%u,%u) -> (%u,%u)",
+                                        _rotation_name(_rotations[r]), x, y,
+                                        phys_min.x, phys_min.y, back.x, back.y);
+                        }
+                }
+        }
+}
+static void test_transform_maps_corners(void)
+{
+        rend_context_t *ctx = make_ctx(48, 32);
+
+        for(size_t r = 0; r < sizeof(_rotations); r++) {
+                rend_context_set_rotation(ctx, _rotations[r]);
+
+                //   the logical origin has to land on SOME physical corner, and the far logical
+                // corner on the opposite one. Which corner is the rotation's business; that the
+                // two stay diagonally opposite is the invariant, and it is what fails if a
+                // translation term is dropped and the image slides off the panel
+                rend_point2d origin = { 0, 0 };
+                rend_point2d far = { (uint16_t)(ctx->dim_x - 1), (uint16_t)(ctx->dim_y - 1) };
+                rend_point2d omin, omax, fmin, fmax;
+                rend_transform_rect(ctx, origin, origin, &omin, &omax);
+                rend_transform_rect(ctx, far, far, &fmin, &fmax);
+
+                uint16_t px_max = (uint16_t)(ctx->phys_dim_x - 1);
+                uint16_t py_max = (uint16_t)(ctx->phys_dim_y - 1);
+
+                CHECK((omin.x == 0 || omin.x == px_max) && (omin.y == 0 || omin.y == py_max),
+                        "rotation %s: logical origin should map to a physical corner, got (%u,%u)",
+                        _rotation_name(_rotations[r]), omin.x, omin.y);
+                CHECK(fmin.x == (omin.x == 0 ? px_max : 0) && fmin.y == (omin.y == 0 ? py_max : 0),
+                        "rotation %s: far corner should be diagonally opposite the origin, got (%u,%u) against (%u,%u)",
+                        _rotation_name(_rotations[r]), fmin.x, fmin.y, omin.x, omin.y);
+        }
+}
+static void test_transform_rect_orders_its_output(void)
+{
+        rend_context_t *ctx = make_ctx(48, 32);
+
+        for(size_t r = 0; r < sizeof(_rotations); r++) {
+                rend_context_set_rotation(ctx, _rotations[r]);
+
+                rend_point2d p0 = { 4, 6 };
+                rend_point2d p1 = { 20, 25 };
+                rend_point2d min, max;
+                rend_transform_rect(ctx, p0, p1, &min, &max);
+
+                //   min really is the minimum on both axes. Half the rotations negate an axis,
+                // so the forward mapping of p0 can come out ABOVE that of p1 -- and every
+                // caller feeds these straight into a fill loop that draws nothing at all when
+                // the bounds arrive the wrong way round
+                CHECK(min.x <= max.x, "rotation %s: min.x %u > max.x %u",
+                        _rotation_name(_rotations[r]), min.x, max.x);
+                CHECK(min.y <= max.y, "rotation %s: min.y %u > max.y %u",
+                        _rotation_name(_rotations[r]), min.y, max.y);
+
+                //   and the area is preserved: a rotation moves a rect, it does not resize it.
+                // Catches a transform that maps both corners onto the same point, which would
+                // satisfy the ordering check above while collapsing everything drawn
+                uint32_t w = (uint32_t)(max.x - min.x) + 1, h = (uint32_t)(max.y - min.y) + 1;
+                uint32_t expect_w = 20 - 4 + 1, expect_h = 25 - 6 + 1;
+                bool swapped = (w == expect_h && h == expect_w);
+                bool same = (w == expect_w && h == expect_h);
+                CHECK(swapped || same, "rotation %s: %ux%u is neither %ux%u nor its transpose",
+                        _rotation_name(_rotations[r]), w, h, expect_w, expect_h);
+        }
+}
+static void test_untransform_clamps_outside_points(void)
+{
+        rend_context_t *ctx = make_ctx(48, 32);
+
+        //   a touch panel's coordinate range need not match the display's, so a report can land
+        // outside the canvas. Clamping rather than wrapping is the contract: rend_point2d's
+        // fields are unsigned, so a negative intermediate becomes an enormous coordinate and
+        // hit-tests against whatever widget happens to live there.
+        //
+        //   swept over all four rotations because the two clamps are not symmetric in when they
+        // fire: at 0 degrees an over-range physical point can only come out too LARGE, and it
+        // takes a rotation carrying a translation term (180, say) for the same point to come
+        // out negative. Testing one orientation exercises one clamp and leaves the other free
+        // to be deleted unnoticed
+        for(size_t r = 0; r < sizeof(_rotations); r++) {
+                rend_context_set_rotation(ctx, _rotations[r]);
+
+                rend_point2d far = rend_untransform_point(ctx,
+                        (rend_point2d) { (uint16_t)(ctx->phys_dim_x + 100),
+                                         (uint16_t)(ctx->phys_dim_y + 100) });
+                CHECK(far.x < ctx->dim_x && far.y < ctx->dim_y,
+                        "rotation %s: a point past the far edge should clamp inside %ux%u, got (%u,%u)",
+                        _rotation_name(_rotations[r]), ctx->dim_x, ctx->dim_y, far.x, far.y);
+
+                rend_point2d origin = rend_untransform_point(ctx, (rend_point2d) { 0, 0 });
+                CHECK(origin.x < ctx->dim_x && origin.y < ctx->dim_y,
+                        "rotation %s: the physical origin should map inside the canvas, got (%u,%u)",
+                        _rotation_name(_rotations[r]), origin.x, origin.y);
+        }
+}
+//   the exact largest scale at which a `w`x`h` image, turned by `angle`, still fits inside a
+// `w`x`h` buffer. rend_scale_inscribed() computes this in Q15 off a per-degree sine table;
+// this computes it in floating point, which is the oracle rather than a reimplementation --
+// the point of the comparison is that two independent routes agree
+static double inscribed_optimum(double w, double h, double angle)
+{
+        double c = fabs(cos(angle * TEST_PI / 180.0));
+        double s = fabs(sin(angle * TEST_PI / 180.0));
+        double fit_w = w / (w * c + h * s);
+        double fit_h = h / (w * s + h * c);
+        double fit = fit_w < fit_h ? fit_w : fit_h;
+        return fit > 1.0 ? 1.0 : fit;
+}
+static void test_scale_inscribed_shrinks_off_axis(void)
+{
+        //   both aspect ratios, because the two axis fits are not interchangeable: on a wide
+        // canvas the height constraint binds and on a tall one the width does. Checking a
+        // single shape leaves whichever term is not binding free to be wrong -- and since the
+        // function returns the smaller of the two, a wrong non-binding term is invisible
+        const int dims[][2] = { { 48, 32 }, { 32, 48 } };
+
+        for(size_t d = 0; d < sizeof(dims) / sizeof(*dims); d++) {
+                rend_context_t *ctx = make_ctx(dims[d][0], dims[d][1]);
+
+                //   on-axis needs no shrinking, and anything less than full scale here would
+                // soften every frame that is not mid-turn
+                CHECK(rend_scale_inscribed(ctx, 0) == REND_SCALE_ONE,
+                        "%dx%d: 0 degrees should need no shrink, got %d",
+                        dims[d][0], dims[d][1], rend_scale_inscribed(ctx, 0));
+
+                for(int angle = -180; angle <= 180; angle += 15) {
+                        int32_t got = rend_scale_inscribed(ctx, (int16_t)angle);
+                        double want = inscribed_optimum(dims[d][0], dims[d][1], angle) * REND_SCALE_ONE;
+
+                        //   too large and the corners this exists to preserve get clipped; too
+                        // small and the image is needlessly shrunk. 1% either side covers the
+                        // per-degree table and the Q15 rounding, and nothing wider
+                        CHECK(got <= want * 1.01,
+                                "%dx%d at %d degrees: %d exceeds the inscribed fit %.0f -- corners will clip",
+                                dims[d][0], dims[d][1], angle, got, want);
+                        CHECK(got >= want * 0.99,
+                                "%dx%d at %d degrees: %d is below the inscribed fit %.0f -- needlessly shrunk",
+                                dims[d][0], dims[d][1], angle, got, want);
+                }
+
+                //   turning left and right need the same room, which the table-driven
+                // implementation only gets right if it takes the magnitude of both terms
+                CHECK(rend_scale_inscribed(ctx, -45) == rend_scale_inscribed(ctx, 45),
+                        "%dx%d: -45 and 45 should agree, got %d and %d", dims[d][0], dims[d][1],
+                        rend_scale_inscribed(ctx, -45), rend_scale_inscribed(ctx, 45));
+        }
+}
+
 // rather than discovered, which is deliberate: a discovery step that silently found nothing
 // would report a clean run having tested precisely zero things, and that is the one failure
 // mode a test suite must not have. `--list` exists so the two can be checked against each
@@ -655,6 +848,11 @@ static const struct {
         { "circle_fill",              test_circle_fill },
         { "circle_fill_matches_outline", test_circle_fill_matches_outline },
         { "demo_title_clears_curve",  test_demo_title_clears_curve },
+        { "transform_round_trip",     test_transform_round_trip },
+        { "transform_maps_corners",   test_transform_maps_corners },
+        { "transform_rect_orders_its_output", test_transform_rect_orders_its_output },
+        { "untransform_clamps_outside_points", test_untransform_clamps_outside_points },
+        { "scale_inscribed_shrinks_off_axis", test_scale_inscribed_shrinks_off_axis },
 };
 #define TEST_CASE_COUNT (sizeof(test_cases) / sizeof(*test_cases))
 

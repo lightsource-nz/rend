@@ -35,6 +35,11 @@ set(REND_TEST_CASES
         circle_fill
         circle_fill_matches_outline
         demo_title_clears_curve
+        transform_round_trip
+        transform_maps_corners
+        transform_rect_orders_its_output
+        untransform_clamps_outside_points
+        scale_inscribed_shrinks_off_axis
 )
 foreach(_case ${REND_TEST_CASES})
         add_test(NAME rend.${_case} COMMAND test_rend_draw ${_case})

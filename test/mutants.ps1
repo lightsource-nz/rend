@@ -41,7 +41,24 @@ $mutants = @(
  @('drop coordinate rounding',     '(((int32_t)radius * _cos_deg_q8_q15(theta) + 16384) >> 15)', '(((int32_t)radius * _cos_deg_q8_q15(theta)) >> 15)'),
  @('arc sweeps the short way',     'if(span <= 0) span += 360;', 'if(span < 0) span = -span;'),
  @('circle fill ignored',          '_set_spans_circle(ctx, p, radius, ctx->color_fg);', '_set_pixels_circle(ctx, p, radius, ctx->color_fg);'),
- @('corner mask ignored',          'int32_t tl = (corners & REND_CORNER_TOP_LEFT)     ? r : 0;', 'int32_t tl = r;')
+ @('corner mask ignored',          'int32_t tl = (corners & REND_CORNER_TOP_LEFT)     ? r : 0;', 'int32_t tl = r;'),
+ #   the coordinate transform. These break the mapping between the space an application draws
+ # in and the space a panel scans out -- so on real hardware they show up as an interface that
+ # responds to presses somewhere other than where it drew itself, which is a slow thing to
+ # diagnose from the symptom and a fast thing to catch here
+ @('untransform drops translation', 'int32_t px = (int32_t)phys.x - m->tx;', 'int32_t px = (int32_t)phys.x;'),
+ @('untransform loses the adjugate', 'int32_t x = (m->d * px - m->b * py) * det;', 'int32_t x = (m->a * px + m->b * py) * det;'),
+ @('untransform swaps its axes',    'int32_t y = (m->a * py - m->c * px) * det;', 'int32_t y = (m->d * px - m->b * py) * det;'),
+ @('untransform does not clamp low', 'if(x < 0) x = 0;', ';'),
+ @('untransform does not clamp high', 'if(x > (int32_t)ctx->dim_x - 1) x = ctx->dim_x - 1;', ';'),
+ @('rotation does not swap dimensions', '        ctx->dim_x = ctx->phys_dim_y;', '        ctx->dim_x = ctx->phys_dim_x;'),
+ @('inscribed scale ignores the height fit', 'int32_t fit = fit_w < fit_h ? fit_w : fit_h;', 'int32_t fit = fit_w;'),
+ @('inscribed scale drops the sine term', 'int32_t need_w = w * c + h * s;', 'int32_t need_w = w * c;'),
+ #   the ordering rend_transform_rect() exists to guarantee. Under a rotation that negates an
+ # axis the forward mapping of p0 lands ABOVE that of p1, and a caller feeding the result
+ # straight into a fill loop then draws nothing at all
+ @('transform_rect assumes corners stay ordered', '    out_min->x = a.x < b.x ? a.x : b.x;', '    out_min->x = a.x;'),
+ @('transform_rect collapses to one corner', '    out_max->y = a.y > b.y ? a.y : b.y;', '    out_max->y = out_min->y;')
 )
 
 $original = Get-Content $src -Raw
