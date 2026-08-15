@@ -274,6 +274,40 @@ void rend_blit_rotated(const rend_context_t *ctx, const uint8_t *src,
     }
 }
 
+void rend_blit_offset(const rend_context_t *ctx, const uint8_t *src, int32_t off_x, int32_t off_y)
+{
+    // 16bpp only, matching rend_blit_rotated() -- a 1bpp path would need bit addressing on
+    // both ends, and the panels that would want one do not animate
+    if(ctx->px_bits != 16 || !src)
+        return;
+
+    int32_t w = ctx->phys_dim_x;
+    int32_t h = ctx->phys_dim_y;
+
+    // shifted entirely off the buffer: every row would clip away below, so say so here
+    if(off_x <= -w || off_x >= w || off_y <= -h || off_y >= h)
+        return;
+
+    // whole rows at a time. this is a translation, so each destination row draws from one
+    // contiguous run of one source row -- there is nothing to sample and nothing to round,
+    // which is what makes it a memcpy per row rather than a loop per pixel
+    for(int32_t dy = 0; dy < h; dy++) {
+        int32_t sy = dy - off_y;
+        if(sy < 0 || sy >= h)
+            continue;
+
+        // the run of destination columns whose source column is inside the buffer
+        int32_t dx0 = off_x > 0 ? off_x : 0;
+        int32_t dx1 = off_x < 0 ? w + off_x : w;
+        if(dx1 <= dx0)
+            continue;
+
+        const uint8_t *s = &src[((uint32_t)sy * (uint32_t)w + (uint32_t)(dx0 - off_x)) * 2];
+        uint8_t *d = &ctx->buffer[((uint32_t)dy * (uint32_t)w + (uint32_t)dx0) * 2];
+        memcpy(d, s, (size_t)(dx1 - dx0) * 2);
+    }
+}
+
 void rend_transform_rect(const rend_context_t *ctx, rend_point2d p0, rend_point2d p1,
                          rend_point2d *out_min, rend_point2d *out_max)
 {

@@ -164,6 +164,22 @@ void rend_blit_rotated(const rend_context_t *ctx, const uint8_t *src,
 // buffer of ctx's dimensions -- REND_SCALE_ONE at 0/180 degrees, smallest at 45
 int32_t rend_scale_inscribed(const rend_context_t *ctx, int16_t angle_deg);
 
+// copies `src` into ctx's own buffer displaced by (off_x, off_y). `src` must be a buffer of
+// exactly ctx's geometry and pixel format, as for rend_blit_rotated().
+//
+// works in PHYSICAL buffer space and ignores ctx->transform, for the same reason
+// rend_blit_rotated() does: this moves an image, it does not draw through the logical-to-
+// physical mapping. A caller wanting to slide in a direction the VIEWER would name has to map
+// that direction itself -- ctx->transform's `a` and `c` give the physical direction logical +x
+// points in, which is exactly that mapping.
+//
+// destination pixels with no source -- the band uncovered by the displacement -- are left as
+// they are, so whatever was drawn first shows through. That is what makes this usable for a
+// transition: draw the incoming image, then slide the outgoing one off it.
+//
+// 16bpp only, matching rend_blit_rotated()
+void rend_blit_offset(const rend_context_t *ctx, const uint8_t *src, int32_t off_x, int32_t off_y);
+
 void rend_draw_circle(const rend_context_t *ctx, rend_point2d centre, uint16_t radius, bool fill);
 // draws the part of a circle between two angles.
 //
