@@ -58,7 +58,17 @@ $mutants = @(
  # axis the forward mapping of p0 lands ABOVE that of p1, and a caller feeding the result
  # straight into a fill loop then draws nothing at all
  @('transform_rect assumes corners stay ordered', '    out_min->x = a.x < b.x ? a.x : b.x;', '    out_min->x = a.x;'),
- @('transform_rect collapses to one corner', '    out_max->y = a.y > b.y ? a.y : b.y;', '    out_max->y = out_min->y;')
+ @('transform_rect collapses to one corner', '    out_max->y = a.y > b.y ? a.y : b.y;', '    out_max->y = out_min->y;'),
+ #   flips, and the double buffer. The flip matrices are built from dim_x/dim_y AFTER rotation
+ # has swapped them, so the two interact -- which is why these are worth separating from the
+ # rotation mutants above
+ @('horizontal and vertical flip swapped', '        flip = (rend_transform_t) { .a = -1, .b = 0, .tx = ctx->dim_x - 1, .c = 0, .d = 1,  .ty = 0 };', '        flip = (rend_transform_t) { .a = 1,  .b = 0, .tx = 0, .c = 0, .d = -1, .ty = ctx->dim_y - 1 };'),
+ @('flip mirrors about the wrong edge', '        flip = (rend_transform_t) { .a = 1,  .b = 0, .tx = 0, .c = 0, .d = -1, .ty = ctx->dim_y - 1 };', '        flip = (rend_transform_t) { .a = 1,  .b = 0, .tx = 0, .c = 0, .d = -1, .ty = ctx->dim_y };'),
+ @('flip is ignored entirely',       '    ctx->transform = _compose_transform(flip, rotate);', '    ctx->transform = rotate;'),
+ @('transforms composed in the wrong order', '    ctx->transform = _compose_transform(flip, rotate);', '    ctx->transform = _compose_transform(rotate, flip);'),
+ @('enabling the double buffer twice reallocates', '    if(ctx->buffer_back)', '    if(0)'),
+ @('swap succeeds without a back buffer', '    if(!ctx->buffer_back)', '    if(0)'),
+ @('swap does not exchange the buffers', '    ctx->buffer_back = front;', '    ;')
 )
 
 $original = Get-Content $src -Raw

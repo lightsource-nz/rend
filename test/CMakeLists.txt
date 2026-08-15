@@ -40,6 +40,9 @@ set(REND_TEST_CASES
         transform_rect_orders_its_output
         untransform_clamps_outside_points
         scale_inscribed_shrinks_off_axis
+        transform_round_trip_with_flips
+        flip_mirrors_the_right_axis
+        double_buffer_swaps
 )
 foreach(_case ${REND_TEST_CASES})
         add_test(NAME rend.${_case} COMMAND test_rend_draw ${_case})

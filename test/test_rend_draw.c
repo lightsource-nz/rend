@@ -830,6 +830,108 @@ static void test_scale_inscribed_shrinks_off_axis(void)
         }
 }
 
+static const uint8_t _flips[] = { REND_FLIP_NONE, REND_FLIP_HORIZONTAL, REND_FLIP_VERTICAL, REND_FLIP_BOTH };
+static const char *_flip_name(uint8_t f)
+{
+        switch(f) {
+        case REND_FLIP_NONE:       return "none";
+        case REND_FLIP_HORIZONTAL: return "horizontal";
+        case REND_FLIP_VERTICAL:   return "vertical";
+        default:                   return "both";
+        }
+}
+
+static void test_transform_round_trip_with_flips(void)
+{
+        rend_context_t *ctx = make_ctx(48, 32);
+
+        //   flip composes with rotation rather than replacing it, and the composition is where
+        // this can go wrong: the flip matrix is built from dim_x/dim_y, which rotation has
+        // already swapped. Build the flip against the wrong pair and the round-trip still
+        // works at 0 and 180 degrees, failing only on the two rotations that transpose
+        for(size_t f = 0; f < sizeof(_flips); f++) {
+                for(size_t r = 0; r < sizeof(_rotations); r++) {
+                        rend_context_set_rotation(ctx, _rotations[r]);
+                        rend_context_set_flip(ctx, _flips[f]);
+
+                        for(uint16_t y = 0; y < ctx->dim_y; y += 3) {
+                                for(uint16_t x = 0; x < ctx->dim_x; x += 3) {
+                                        rend_point2d logical = { x, y };
+                                        rend_point2d pmin, pmax;
+                                        rend_transform_rect(ctx, logical, logical, &pmin, &pmax);
+                                        rend_point2d back = rend_untransform_point(ctx, pmin);
+
+                                        CHECK(back.x == x && back.y == y,
+                                                "flip %s rotation %s: (%u,%u) -> (%u,%u) -> (%u,%u)",
+                                                _flip_name(_flips[f]), _rotation_name(_rotations[r]),
+                                                x, y, pmin.x, pmin.y, back.x, back.y);
+                                }
+                        }
+                }
+        }
+}
+static void test_flip_mirrors_the_right_axis(void)
+{
+        rend_context_t *ctx = make_ctx(48, 32);
+        rend_context_set_rotation(ctx, REND_ROTATE_0);
+
+        //   the round-trip above is self-consistent by construction -- it would pass just as
+        // happily if horizontal and vertical were swapped, or if both were no-ops. This pins
+        // which axis each one actually mirrors, at the one rotation where the answer is
+        // unambiguous
+        struct { uint8_t flip; uint16_t want_x, want_y; } expect[] = {
+                { REND_FLIP_NONE,       0, 0 },
+                { REND_FLIP_HORIZONTAL, 47, 0 },
+                { REND_FLIP_VERTICAL,   0, 31 },
+                { REND_FLIP_BOTH,       47, 31 },
+        };
+
+        for(size_t i = 0; i < sizeof(expect) / sizeof(*expect); i++) {
+                rend_context_set_flip(ctx, expect[i].flip);
+                rend_point2d origin = { 0, 0 }, min, max;
+                rend_transform_rect(ctx, origin, origin, &min, &max);
+                CHECK(min.x == expect[i].want_x && min.y == expect[i].want_y,
+                        "flip %s: logical origin -> (%u,%u), expected (%u,%u)",
+                        _flip_name(expect[i].flip), min.x, min.y,
+                        expect[i].want_x, expect[i].want_y);
+        }
+}
+static void test_double_buffer_swaps(void)
+{
+        rend_context_t *ctx = make_ctx(16, 16);
+
+        //   swapping without a back buffer is a no-op that says so, rather than swapping in
+        // NULL. A caller that enables double buffering conditionally (on how much RAM is
+        // left, say) then draws through the same code either way depends on this
+        CHECK(!rend_context_swap_buffers(ctx), "swapping with no back buffer should return false");
+        CHECK(ctx->buffer != NULL, "a failed swap should leave the front buffer intact");
+
+        rend_context_enable_double_buffer(ctx);
+        CHECK(ctx->buffer_back != NULL, "enabling double buffering should allocate a back buffer");
+
+        //   enabling twice must not allocate again: the second allocation would leak the
+        // first, and on a device where the buffer is a sizeable fraction of RAM that is one
+        // stray call away from an allocation failure much later
+        uint8_t *back = ctx->buffer_back;
+        rend_context_enable_double_buffer(ctx);
+        CHECK(ctx->buffer_back == back, "enabling double buffering twice reallocated the buffer");
+
+        uint8_t *front = ctx->buffer;
+        CHECK(rend_context_swap_buffers(ctx), "swapping with a back buffer should return true");
+        CHECK(ctx->buffer == back && ctx->buffer_back == front,
+                "the swap should exchange the two buffers, not overwrite one");
+
+        //   and the buffers are genuinely separate memory. Drawing into the new front must
+        // leave the old one alone -- that separation is the entire point, and a swap that
+        // handed back the same pointer would satisfy every check above
+        rend_draw_clear(ctx);
+        rend_draw_point(ctx, (rend_point2d) { 3, 4 });
+        CHECK(lit(ctx, 3, 4), "the point should be lit in the new front buffer");
+        size_t off = ((size_t)4 * ctx->phys_dim_x + 3) * 2;
+        CHECK(front[off] == 0 && front[off + 1] == 0,
+                "drawing after the swap wrote into the back buffer as well");
+}
+
 // rather than discovered, which is deliberate: a discovery step that silently found nothing
 // would report a clean run having tested precisely zero things, and that is the one failure
 // mode a test suite must not have. `--list` exists so the two can be checked against each
@@ -853,6 +955,9 @@ static const struct {
         { "transform_rect_orders_its_output", test_transform_rect_orders_its_output },
         { "untransform_clamps_outside_points", test_untransform_clamps_outside_points },
         { "scale_inscribed_shrinks_off_axis", test_scale_inscribed_shrinks_off_axis },
+        { "transform_round_trip_with_flips", test_transform_round_trip_with_flips },
+        { "flip_mirrors_the_right_axis", test_flip_mirrors_the_right_axis },
+        { "double_buffer_swaps",      test_double_buffer_swaps },
 };
 #define TEST_CASE_COUNT (sizeof(test_cases) / sizeof(*test_cases))
 
